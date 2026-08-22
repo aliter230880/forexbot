@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/
+downloads/
+backup/
+*.log
+login.ini
+fx.mp4
+i.webp

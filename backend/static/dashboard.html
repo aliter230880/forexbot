@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forex Grid Bot — XAUUSD</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root {
+    --bg: #0d1117; --side: #10151c; --card: #161b22; --border: #21262d;
+    --text: #c9d1d9; --muted: #8b949e; --green: #2ea043; --red: #f85149;
+    --blue: #388bfd; --gold: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, 'Segoe UI', Roboto, sans-serif; display: flex; min-height: 100vh; }
+
+  /* сайдбар */
+  .sidebar { width: 200px; background: var(--side); border-right: 1px solid var(--border); padding: 18px 12px; flex-shrink: 0; }
+  .logo { font-weight: 700; font-size: 15px; padding: 0 10px 14px; color: #fff; }
+  .logo span { color: var(--gold); }
+  .nav-item { display: block; padding: 8px 10px; border-radius: 7px; color: var(--muted); cursor: pointer; margin-bottom: 2px; text-decoration: none; font-size: 13px; }
+  .nav-item:hover { background: var(--card); color: var(--text); }
+  .nav-item.active { background: var(--card); color: #fff; }
+  .side-note { margin-top: 24px; padding: 10px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); }
+
+  .main { flex: 1; padding: 22px 26px; max-width: 1200px; }
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  .header h1 { font-size: 20px; color: #fff; }
+  .pill { padding: 4px 12px; border-radius: 12px; font-size: 12px; }
+  .p-green { background: rgba(46,160,67,.15); color: var(--green); }
+  .p-red { background: rgba(248,81,73,.15); color: var(--red); }
+  .p-gold { background: rgba(210,153,34,.15); color: var(--gold); }
+  .updated { color: var(--muted); font-size: 11px; margin-left: auto; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  .card .value { font-size: 21px; font-weight: 600; margin-top: 5px; color: #fff; }
+  .card .note { color: var(--muted); font-size: 11px; margin-top: 3px; }
+  .pos { color: var(--green) !important; } .neg { color: var(--red) !important; }
+
+  .section { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .section h2 { font-size: 14px; margin-bottom: 12px; color: #fff; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  .events { font-size: 12px; }
+  .events div { padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .events .ts { color: var(--muted); margin-right: 8px; }
+  .page { display: none; } .page.active { display: block; }
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="logo">⚡ Grid<span>FX</span></div>
+  <a class="nav-item active" data-page="overview">📊 Обзор</a>
+  <a class="nav-item" data-page="history">📜 История пар</a>
+  <a class="nav-item" data-page="events">🔔 События</a>
+  <div class="side-note">
+    PU Prime · Demo<br>плечо 1:500<br>обновление 10 сек
+  </div>
+</aside>
+<main class="main">
+  <div class="header">
+    <h1>XAUUSD Grid Bot</h1>
+    <span class="pill p-gold" id="mode">DEMO</span>
+    <span class="pill p-green" id="status-pill">—</span>
+    <span class="updated" id="updated"></span>
+  </div>
+
+  <!-- ОБЗОР -->
+  <div class="page active" id="page-overview">
+    <div class="cards">
+      <div class="card"><div class="label">Реализованный PnL</div><div class="value" id="pnl">—</div><div class="note" id="pairs_note"></div></div>
+      <div class="card"><div class="label">Equity</div><div class="value" id="equity">—</div><div class="note" id="balance_note"></div></div>
+      <div class="card"><div class="label">Плавающий PnL</div><div class="value" id="floating">—</div><div class="note" id="positions_note"></div></div>
+      <div class="card"><div class="label">Затраты</div><div class="value" id="costs">—</div><div class="note">комиссии + свопы · инфра $0/мес</div></div>
+    </div>
+
+    <div class="section"><h2>Счёт (Portfolio)</h2>
+      <div class="cards" style="margin-bottom:0">
+        <div class="card"><div class="label">Баланс</div><div class="value" id="acc_balance">—</div><div class="note">USD</div></div>
+        <div class="card"><div class="label">Свободная маржа</div><div class="value" id="acc_free">—</div><div class="note" id="acc_margin_note"></div></div>
+        <div class="card"><div class="label">Margin Level</div><div class="value" id="acc_ml">—</div><div class="note">норма &gt; 300%</div></div>
+        <div class="card"><div class="label">Золото в позициях</div><div class="value" id="acc_gold">—</div><div class="note" id="acc_gold_note"></div></div>
+      </div>
+    </div>
+
+    <div class="section"><h2>Grid Bot</h2>
+      <table><thead><tr>
+        <th>Symbol</th><th>Брокер</th><th>Диапазон сетки</th><th>Уровни</th><th>Ордера</th><th>PnL</th><th>Статус</th>
+      </tr></thead><tbody>
+        <tr>
+          <td><b style="color:#fff" id="t_symbol">XAUUSD.s</b></td>
+          <td>PU Prime (demo)</td>
+          <td id="t_range">—</td>
+          <td id="t_levels">—</td>
+          <td id="t_orders">—</td>
+          <td id="t_pnl">—</td>
+          <td id="t_status">—</td>
+        </tr>
+      </tbody></table>
+    </div>
+
+    <div class="section"><h2>Equity (24ч)</h2><canvas id="equityChart" height="80"></canvas></div>
+  </div>
+
+  <!-- ИСТОРИЯ -->
+  <div class="page" id="page-history">
+    <div class="cards">
+      <div class="card"><div class="label">Закрыто пар</div><div class="value" id="h_closed">—</div></div>
+      <div class="card"><div class="label">Средний PnL / пару</div><div class="value" id="h_avg">—</div></div>
+      <div class="card"><div class="label">Лучшая / худшая</div><div class="value" id="h_best" style="font-size:16px">—</div></div>
+      <div class="card"><div class="label">Winrate</div><div class="value" id="h_wr">—</div></div>
+    </div>
+    <div class="section"><h2>Закрытые пары</h2>
+      <table><thead><tr>
+        <th>Закрыта (UTC)</th><th>Buy</th><th>Sell</th><th>Лот</th><th>PnL</th><th>Затраты</th><th>#</th>
+      </tr></thead><tbody id="closedBody"></tbody></table></div>
+    <div class="section"><h2>Открытые пары</h2>
+      <table><thead><tr>
+        <th>Открыта (UTC)</th><th>Buy</th><th>TP</th><th>Лот</th><th>#</th>
+      </tr></thead><tbody id="openBody"></tbody></table></div>
+  </div>
+
+  <!-- СОБЫТИЯ -->
+  <div class="page" id="page-events">
+    <div class="section"><h2>Лог событий</h2><div class="events" id="events"></div></div>
+  </div>
+</main>
+
+<script>
+const fmt = (x, d=2) => (x===null||x===undefined) ? '—' : Number(x).toFixed(d);
+const cls = x => (x > 0 ? 'pos' : (x < 0 ? 'neg' : ''));
+const sign = x => (x >= 0 ? '+' : '') + '$' + fmt(x);
+let chart = null, cached = {};
+
+document.querySelectorAll('.nav-item').forEach(el => el.addEventListener('click', () => {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('page-' + el.dataset.page).classList.add('active');
+}));
+
+async function load() {
+  try {
+    const [sum, eq, closed, open, ev] = await Promise.all([
+      fetch('/api/summary').then(r=>r.json()),
+      fetch('/api/equity?hours=24').then(r=>r.json()),
+      fetch('/api/pairs?status=closed&limit=200').then(r=>r.json()),
+      fetch('/api/pairs?status=open').then(r=>r.json()),
+      fetch('/api/events?limit=50').then(r=>r.json()),
+    ]);
+    cached = {sum, closed, open};
+    const s = sum.snapshot || {}, st = sum.state, g = sum.grid;
+
+    // шапка
+    const pill = document.getElementById('status-pill');
+    if (st.halted) { pill.textContent = '🛑 остановлен'; pill.className = 'pill p-red'; }
+    else if (st.trend_paused) { pill.textContent = '⚠️ пауза тренда'; pill.className = 'pill p-gold'; }
+    else if (st.weekend_flat) { pill.textContent = '🗓 weekend'; pill.className = 'pill p-gold'; }
+    else { pill.textContent = '● торгует'; pill.className = 'pill p-green'; }
+    document.getElementById('updated').textContent = 'обновлено ' + new Date().toLocaleTimeString();
+
+    // карточки обзора
+    const pnl = sum.stats.realized_pnl;
+    document.getElementById('pnl').textContent = sign(pnl);
+    document.getElementById('pnl').className = 'value ' + cls(pnl);
+    document.getElementById('pairs_note').textContent = sum.stats.closed_pairs + ' пар закрыто';
+    document.getElementById('equity').textContent = '$' + fmt(s.equity);
+    document.getElementById('balance_note').textContent = 'баланс $' + fmt(s.balance);
+    document.getElementById('floating').textContent = s.floating != null ? sign(s.floating) : '—';
+    document.getElementById('floating').className = 'value ' + cls(s.floating || 0);
+    document.getElementById('positions_note').textContent = (s.positions||0) + ' позиций · тренд 24ч ' + (s.trend!=null ? fmt(s.trend)+'%' : '—');
+    document.getElementById('costs').textContent = '$' + fmt(sum.stats.total_costs);
+
+    // счёт
+    document.getElementById('acc_balance').textContent = '$' + fmt(s.balance);
+    document.getElementById('acc_free').textContent = '$' + fmt(s.margin_free);
+    document.getElementById('acc_margin_note').textContent = 'маржа занята: $' + fmt(s.margin);
+    document.getElementById('acc_ml').textContent = s.margin_level ? fmt(s.margin_level, 0) + '%' : '—';
+    const oz = (s.positions||0) * g.lot * 100;
+    document.getElementById('acc_gold').textContent = oz ? oz.toFixed(0) + ' oz' : '—';
+    document.getElementById('acc_gold_note').textContent = oz ? ('≈ $' + fmt(oz * (s.grid_high || 0)) + ' номинал') : 'нет позиций';
+
+    // таблица бота
+    document.getElementById('t_symbol').textContent = sum.symbol;
+    document.getElementById('t_range').textContent = (s.grid_low && s.grid_high) ? fmt(s.grid_low) + ' – ' + fmt(s.grid_high) : '—';
+    document.getElementById('t_levels').textContent = (s.buy_levels != null ? s.buy_levels : '—') + ' / ' + g.levels;
+    document.getElementById('t_orders').textContent = (s.buy_levels||0) + ' open · ' + (sum.stats.closed_pairs + sum.stats.open_pairs) + ' filled';
+    document.getElementById('t_pnl').innerHTML = '<span class="' + cls(pnl) + '">' + sign(pnl) + '</span>';
+    document.getElementById('t_status').innerHTML = pill.cloneNode(true).outerHTML;
+
+    // equity график
+    const labels = eq.map(r => r.ts.slice(11, 16));
+    const data = eq.map(r => r.equity);
+    if (chart) chart.destroy();
+    chart = new Chart(document.getElementById('equityChart'), {
+      type: 'line',
+      data: { labels, datasets: [{ data, borderColor: '#388bfd', backgroundColor: 'rgba(56,139,253,.1)', fill: true, pointRadius: 0, tension: .2 }]},
+      options: { plugins: { legend: { display: false } },
+        scales: { y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                  x: { ticks: { color: '#8b949e', maxTicksLimit: 10 }, grid: { display: false } } } }
+    });
+
+    // история
+    document.getElementById('h_closed').textContent = closed.length;
+    const avg = closed.length ? closed.reduce((a, r) => a + r.pnl, 0) / closed.length : 0;
+    document.getElementById('h_avg').textContent = sign(avg);
+    document.getElementById('h_avg').className = 'value ' + cls(avg);
+    if (closed.length) {
+      const best = Math.max(...closed.map(r => r.pnl)), worst = Math.min(...closed.map(r => r.pnl));
+      document.getElementById('h_best').innerHTML = '<span class="' + cls(best) + '">' + sign(best) + '</span> / <span class="' + cls(worst) + '" style="font-size:14px">' + sign(worst) + '</span>';
+      const wins = closed.filter(r => r.pnl > 0).length;
+      document.getElementById('h_wr').textContent = (100 * wins / closed.length).toFixed(0) + '% (' + wins + '/' + closed.length + ')';
+    }
+    document.getElementById('closedBody').innerHTML = closed.map(r =>
+      `<tr><td>${r.close_time||''}</td><td>${fmt(r.buy_price)}</td><td>${fmt(r.sell_price)}</td><td>${r.lot}</td>
+       <td class="${cls(r.pnl)}">${sign(r.pnl)}</td><td>$${fmt(r.costs)}</td><td>#${r.buy_ticket}</td></tr>`).join('')
+      || '<tr><td colspan="7" style="color:#8b949e">пока пусто</td></tr>';
+    document.getElementById('openBody').innerHTML = open.map(r =>
+      `<tr><td>${r.open_time||''}</td><td>${fmt(r.buy_price)}</td><td>${fmt(r.buy_price + g.tp_usd)}</td><td>${r.lot}</td><td>#${r.buy_ticket}</td></tr>`).join('')
+      || '<tr><td colspan="5" style="color:#8b949e">открытых нет</td></tr>';
+
+    // события
+    document.getElementById('events').innerHTML = ev.map(r =>
+      `<div><span class="ts">${r.ts}</span>${r.message}</div>`).join('') || 'пусто';
+  } catch (e) {
+    document.getElementById('updated').textContent = 'ошибка: ' + e;
+  }
+}
+load();
+setInterval(load, 10000);
+</script>
+</body>
+</html>
