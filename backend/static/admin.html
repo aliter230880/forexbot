@@ -57,6 +57,26 @@
   </div>
 </div>
 
+<div class="section"><h2>⚡ Скальпинг — статистика (профиль SCALP)</h2>
+  <div class="cards" style="margin-bottom:12px">
+    <div class="card"><div class="label">Трансляция в канал</div><div class="value" id="sc-signals" style="font-size:15px">—</div><div class="note" id="sc-signals-note"></div></div>
+    <div class="card"><div class="label">Сделок сегодня</div><div class="value" id="sc-today">—</div><div class="note">лимит 30/день</div></div>
+    <div class="card"><div class="label">Winrate</div><div class="value" id="sc-wr">—</div><div class="note" id="sc-wr-note"></div></div>
+    <div class="card"><div class="label">Реализовано (скальп)</div><div class="value" id="sc-pnl">—</div><div class="note" id="sc-open"></div></div>
+  </div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="ok" onclick="scalpSignals(true)">📡 Включить трансляцию в канал</button>
+    <button class="danger" onclick="scalpSignals(false)">🔇 Выключить трансляцию</button>
+    <span id="sc-msg" style="color:var(--muted);font-size:12px"></span>
+  </div>
+  <h2 style="margin-top:14px">Открытые сделки</h2>
+  <table><thead><tr><th>Открыта</th><th>Сторона</th><th>Вход</th><th>SL</th><th>TP</th><th>#</th></tr></thead>
+    <tbody id="sc-open-tbl"></tbody></table>
+  <h2 style="margin-top:14px">Последние закрытые сделки</h2>
+  <table><thead><tr><th>Закрыта</th><th>Сторона</th><th>Вход</th><th>Выход</th><th>Причина</th><th>PnL</th></tr></thead>
+    <tbody id="sc-closed-tbl"></tbody></table>
+</div>
+
 <div class="section"><h2>Рассылка подписчикам</h2>
   <textarea id="bc-text" rows="2" placeholder="Текст сообщения подписчикам..."></textarea>
   <div class="row" style="margin-top:8px">
@@ -88,11 +108,12 @@ const sign=x=>(x>=0?'+':'')+'$'+fmt(x);
 let chart=null;
 async function load(){
   try{
-    const [sum,eq,subs,ev]=await Promise.all([
+    const [sum,eq,subs,ev,sc]=await Promise.all([
       fetch('/api/summary').then(r=>r.json()),
       fetch('/api/equity?hours=24').then(r=>r.json()),
       fetch('/api/admin/subscribers').then(r=>r.json()),
       fetch('/api/events?limit=50').then(r=>r.json()),
+      fetch('/api/admin/scalp').then(r=>r.json()).catch(()=>null),
     ]);
     const s=sum.snapshot||{}, st=sum.state;
     const el=document.getElementById('st-status');
@@ -122,6 +143,25 @@ async function load(){
       data:{labels,datasets:[{data,borderColor:'#388bfd',backgroundColor:'rgba(56,139,253,.1)',fill:true,pointRadius:0,tension:.2}]},
       options:{plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}},x:{ticks:{color:'#8b949e',maxTicksLimit:10},grid:{display:false}}}}});
     document.getElementById('events').innerHTML=ev.map(r=>`<div><span class="ts">${r.ts}</span>${r.message}</div>`).join('')||'—';
+
+    if(sc){
+      const on=sc.signals_on;
+      document.getElementById('sc-signals').innerHTML=on?'<span class="pill p-green">ВКЛЮЧЕНА</span>':'<span class="pill p-red">выключена</span>';
+      document.getElementById('sc-signals-note').textContent=on?'сигналы уходят в @forex_vip_first':'бот торгует молча';
+      document.getElementById('sc-today').textContent=sc.stats.trades_today;
+      document.getElementById('sc-wr').textContent=sc.stats.winrate+'%';
+      document.getElementById('sc-wr-note').textContent=sc.stats.closed_trades+' сделок закрыто';
+      document.getElementById('sc-pnl').textContent=sign(sc.stats.realized_pnl);
+      document.getElementById('sc-pnl').className='value '+cls(sc.stats.realized_pnl);
+      document.getElementById('sc-open').textContent=sc.stats.open_trades+' открыто сейчас';
+      document.getElementById('sc-open-tbl').innerHTML=sc.open.map(r=>
+        `<tr><td>${r.open_time||''}</td><td>${r.side}</td><td>${fmt(r.entry)}</td><td>${fmt(r.sl)}</td><td>${fmt(r.tp)}</td><td>#${r.ticket}</td></tr>`
+      ).join('')||'<tr><td colspan="6" style="color:var(--muted)">нет открытых</td></tr>';
+      document.getElementById('sc-closed-tbl').innerHTML=sc.closed.map(r=>
+        `<tr><td>${r.close_time||''}</td><td>${r.side}</td><td>${fmt(r.entry)}</td><td>${fmt(r.exit)}</td><td>${(r.reason||'').toUpperCase()}</td><td class="${cls(r.pnl)}">${sign(r.pnl)}</td></tr>`
+      ).join('')||'<tr><td colspan="6" style="color:var(--muted)">пока пусто</td></tr>';
+    }
+
     document.getElementById('updated').textContent='обновлено '+new Date().toLocaleTimeString();
   }catch(e){document.getElementById('updated').textContent='ошибка: '+e;}
 }
@@ -135,6 +175,10 @@ async function broadcast(){
   const r=await fetch('/api/admin/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})});
   document.getElementById('bc-msg').textContent=r.ok?'поставлено в очередь':'ошибка';
   if(r.ok)document.getElementById('bc-text').value='';
+}
+async function scalpSignals(on){
+  const r=await fetch('/api/admin/bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:on?'signals_on':'signals_off'})});
+  document.getElementById('sc-msg').textContent=r.ok?'команда отправлена, применится в течение 20 сек':'ошибка';
 }
 load(); setInterval(load,10000);
 </script>

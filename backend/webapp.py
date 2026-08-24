@@ -101,12 +101,18 @@ def equity(hours: int = 24):
 @app.get("/api/pairs")
 def pairs(status: str = "closed", limit: int = 100):
     if config.PROFILE == "SCALP":
+        if status == "open":
+            return JSONResponse([
+                {"buy_price": r["entry"], "lot": config.SCALP_LOT,
+                 "open_time": r["open_time"], "buy_ticket": r["ticket"],
+                 "side": r["side"], "sl": r["sl"], "tp": r["tp"],
+                 "status": "open"} for r in storage.scalp_open_trades()])
         rows = storage.scalp_closed(limit)
         return JSONResponse([
             {"buy_price": r["entry"], "sell_price": r["exit"], "lot": config.SCALP_LOT,
              "pnl": r["pnl"], "costs": 0.0, "close_time": r["close_time"],
              "open_time": r["open_time"], "buy_ticket": r["ticket"], "side": r["side"],
-             "status": r["status"]} for r in rows])
+             "reason": r["reason"], "status": r["status"]} for r in rows])
     if status == "open":
         rows = storage.open_pairs()
     else:
@@ -146,11 +152,24 @@ async def broadcast(request: Request):
 async def bot_control(request: Request):
     body = await request.json()
     action = body.get("action")
-    if action not in ("start", "stop"):
-        return JSONResponse({"ok": False, "error": "action: start|stop"}, status_code=400)
+    if action not in ("start", "stop", "signals_on", "signals_off"):
+        return JSONResponse({"ok": False, "error": "action: start|stop|signals_on|signals_off"},
+                            status_code=400)
     cmd_file = config.DATA_DIR / "cmd.json"
     cmd_file.write_text(json.dumps({"action": action}), encoding="utf-8")
     return JSONResponse({"ok": True, "queued": action})
+
+
+@app.get("/api/admin/scalp")
+def admin_scalp():
+    from . import storage as st
+    state = st.state_load()
+    return JSONResponse({
+        "signals_on": bool(state.get("scalp_signals", False)),
+        "stats": st.scalp_stats(),
+        "open": [_row(r) for r in st.scalp_open_trades()],
+        "closed": [_row(r) for r in st.scalp_closed(50)],
+    })
 
 
 if __name__ == "__main__":

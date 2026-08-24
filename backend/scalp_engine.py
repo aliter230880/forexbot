@@ -128,9 +128,10 @@ class ScalpBot:
                 log.info("SCALP %s @ %.2f sl %.2f tp %.2f", side, res.price, sl, tp)
                 storage.log_event("scalp", f"{side} @ {res.price:.2f}")
                 from .notifier import send
-                send(f"⚡ СКАЛЬП {side} | XAUUSD\n"
-                     f"Вход @ {res.price:.2f} (лот {config.SCALP_LOT})\n"
-                     f"TP {tp:.2f} (+${config.SCALP_TP_USD:.0f}) · SL {sl:.2f} (-${config.SCALP_SL_USD:.0f})")
+                if self.state.get("scalp_signals"):
+                    send(f"⚡ СКАЛЬП {side} | XAUUSD\n"
+                         f"Вход @ {res.price:.2f} (лот {config.SCALP_LOT})\n"
+                         f"TP {tp:.2f} (+${config.SCALP_TP_USD:.0f}) · SL {sl:.2f} (-${config.SCALP_SL_USD:.0f})")
                 return res.order
             if res and res.retcode != mt5.TRADE_RETCODE_INVALID_FILL:
                 log.error("scalp order failed: %s %s", res.retcode, res.comment)
@@ -156,10 +157,11 @@ class ScalpBot:
             emoji = "✅" if pnl >= 0 else "🛑"
             log.info("SCALP CLOSED %s %s → %.2f pnl %.2f", t["side"], reason, d.price, pnl)
             from .notifier import send
-            send(f"{emoji} СКАЛЬП ЗАКРЫТ ({reason.upper()}) | {t['side']}\n"
-                 f"Выход @ {d.price:.2f} · PnL {pnl:+.2f}$\n"
-                 f"Сессия: {s['closed_trades']} сделок, winrate {s['winrate']:.0f}%, "
-                 f"итого {s['realized_pnl']:+.2f}$")
+            if self.state.get("scalp_signals"):
+                send(f"{emoji} СКАЛЬП ЗАКРЫТ ({reason.upper()}) | {t['side']}\n"
+                     f"Выход @ {d.price:.2f} · PnL {pnl:+.2f}$\n"
+                     f"Сессия: {s['closed_trades']} сделок, winrate {s['winrate']:.0f}%, "
+                     f"итого {s['realized_pnl']:+.2f}$")
 
     # ---------- защита ----------
 
@@ -203,8 +205,10 @@ class ScalpBot:
         self.state.update(halted=True, halted_reason=reason)
         storage.log_event("halt", reason)
         log.error("HALT: %s", reason)
-        from .notifier import send
-        send(f"🛑 СТОП (скальп): {reason}\nПозиции закрыты, ордера сняты.")
+        from .notifier import send, send_to, chat_id
+        send_to(chat_id(), f"🛑 СТОП (скальп): {reason}\nПозиции закрыты, ордера сняты.")
+        if self.state.get("scalp_signals"):
+            send(f"🛑 СТОП (скальп): {reason}\nПозиции закрыты, ордера сняты.")
         self._save()
 
     def resume(self):

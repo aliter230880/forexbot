@@ -92,6 +92,16 @@ def handle_cmd_file(bot):
     elif action == "broadcast":
         from .notifier import send
         send("📢 " + cmd.get("text", ""))
+    elif action == "signals_on":
+        bot.state["scalp_signals"] = True
+        storage.state_save(bot.state)
+        from .notifier import send_to, chat_id
+        send_to(chat_id(), "📡 Трансляция скальп-сигналов в канал ВКЛЮЧЕНА")
+    elif action == "signals_off":
+        bot.state["scalp_signals"] = False
+        storage.state_save(bot.state)
+        from .notifier import send_to, chat_id
+        send_to(chat_id(), "🔇 Трансляция скальп-сигналов в канал ВЫКЛЮЧЕНА")
 
 
 def cmd_run():
