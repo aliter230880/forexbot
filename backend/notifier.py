@@ -96,6 +96,24 @@ def send_to(cid: str, text: str):
         log.warning("telegram send_to %s failed: %s", cid, e)
 
 
+def send_photo(path, caption: str = ""):
+    """Фото с подписью в канал (или первому подписчику при отсутствии канала)."""
+    if not config.TELEGRAM_BOT_TOKEN:
+        return
+    import requests
+    target = config.TELEGRAM_CHANNEL or (subscribers()[:1] or [None])[0]
+    if not target:
+        return
+    try:
+        with open(path, "rb") as f:
+            requests.post(
+                f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendPhoto",
+                data={"chat_id": target, "caption": caption[:1024]},
+                files={"photo": f}, timeout=30)
+    except Exception as e:  # noqa: BLE001
+        log.warning("send_photo failed: %s", e)
+
+
 def poll_commands(bot):
     """Забирает команды Telegram. Вызывается из главного цикла."""
     global _offset

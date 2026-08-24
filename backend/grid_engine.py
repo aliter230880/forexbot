@@ -142,8 +142,9 @@ class GridBot:
         return ticket
 
     def _signal_grid(self, bid: float, reason: str):
-        """Сигнал в канал: лесенка + ориентир времени до ближнего уровня."""
-        from .notifier import send
+        """Сигнал в канал: скриншот зоны торговли + лесенка + ориентир времени."""
+        from .notifier import send, send_photo
+        from .chartimg import render_grid
         buys = sorted(self._buy_limits(), key=lambda o: o.price_open, reverse=True)
         if not buys:
             return
@@ -152,7 +153,7 @@ class GridBot:
         atr = self.atr_usd_per_hour()
         eta = self.eta_hours(bid - top)
         atr_note = f"волатильность ~${atr:.1f}/ч" if atr else ""
-        send(
+        caption = (
             f"📊 СЕТКА {reason} | XAUUSD\n"
             f"Уровней: {len(buys)} · шаг ${config.GRID_STEP_USD:.0f} · лот {config.GRID_LOT}\n"
             f"Диапазон: {buys[-1].price_open:.2f} – {top:.2f}\n"
@@ -160,6 +161,18 @@ class GridBot:
             f"⏱ {atr_note}, первый уровень {top:.2f} — {eta}\n"
             f"Повторяйте: buy-limit по ценам уровней, TP +${config.TP_USD:.0f}"
         )
+        img = None
+        try:
+            from . import chartimg
+            img = chartimg.render_grid([o.price_open for o in buys], bid,
+                                       config.DATA_DIR / "grid_chart.png",
+                                       filled=[p.price_open for p in gw.positions(storage.MAGIC)])
+        except Exception as e:  # noqa: BLE001
+            log.warning("chart render failed: %s", e)
+        if img:
+            send_photo(img, caption)
+        else:
+            send(caption)
 
     # ---------- синхронизация сделок ----------
 

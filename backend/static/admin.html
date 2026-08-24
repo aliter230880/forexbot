@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Forex Grid Bot</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --border:#21262d; --text:#c9d1d9; --muted:#8b949e; --green:#2ea043; --red:#f85149; --blue:#388bfd; --gold:#d29922; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,'Segoe UI',Roboto,sans-serif; padding:20px; }
+  h1 { font-size:18px; color:#fff; }
+  .sub { color:var(--muted); font-size:12px; margin-bottom:16px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; }
+  .card .label { color:var(--muted); font-size:11px; text-transform:uppercase; }
+  .card .value { font-size:20px; font-weight:600; margin-top:4px; color:#fff; }
+  .card .note { color:var(--muted); font-size:11px; margin-top:2px; }
+  .pos { color:var(--green)!important; } .neg { color:var(--red)!important; }
+  .section { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .section h2 { font-size:14px; color:#fff; margin-bottom:10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:var(--muted); font-size:11px; text-transform:uppercase; padding:6px 8px; border-bottom:1px solid var(--border); }
+  td { padding:6px 8px; border-bottom:1px solid var(--border); }
+  button { background:#21262d; color:var(--text); border:1px solid var(--border); border-radius:7px; padding:8px 16px; cursor:pointer; font-size:13px; }
+  button:hover { background:#30363d; color:#fff; }
+  button.danger { border-color:var(--red); color:var(--red); }
+  button.ok { border-color:var(--green); color:var(--green); }
+  textarea, input { background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:7px; padding:8px; font:13px inherit; width:100%; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .events { font-size:12px; max-height:340px; overflow-y:auto; }
+  .events div { padding:4px 0; border-bottom:1px solid var(--border); }
+  .events .ts { color:var(--muted); margin-right:8px; }
+  .pill { padding:3px 10px; border-radius:10px; font-size:11px; }
+  .p-green { background:rgba(46,160,67,.15); color:var(--green); }
+  .p-red { background:rgba(248,81,73,.15); color:var(--red); }
+  .p-gold { background:rgba(210,153,34,.15); color:var(--gold); }
+</style>
+</head>
+<body>
+<h1>⚙️ Админ-панель — XAUUSD Grid Bot</h1>
+<div class="sub">Управление · подписчики · рассылка · события | обновление 10 сек <span id="updated" style="float:right"></span></div>
+
+<div class="cards">
+  <div class="card"><div class="label">Статус</div><div class="value" id="st-status" style="font-size:15px">—</div><div class="note" id="st-note"></div></div>
+  <div class="card"><div class="label">Реализованный PnL</div><div class="value" id="st-pnl">—</div><div class="note" id="st-pairs"></div></div>
+  <div class="card"><div class="label">Equity / Баланс</div><div class="value" id="st-eq" style="font-size:16px">—</div><div class="note" id="st-bal"></div></div>
+  <div class="card"><div class="label">Сетка / Позиции</div><div class="value" id="st-grid" style="font-size:16px">—</div><div class="note" id="st-pos"></div></div>
+  <div class="card"><div class="label">Подписчики TG</div><div class="value" id="st-subs">—</div><div class="note">личные чаты + канал</div></div>
+</div>
+
+<div class="section"><h2>Управление ботом</h2>
+  <div class="row">
+    <button class="danger" onclick="botAction('stop')">🛑 Полный стоп (ордера+позиции+терминал)</button>
+    <button class="ok" onclick="botAction('start')">▶️ Запустить / возобновить</button>
+    <span id="ctrl-msg" style="color:var(--muted);font-size:12px"></span>
+  </div>
+</div>
+
+<div class="section"><h2>Рассылка подписчикам</h2>
+  <textarea id="bc-text" rows="2" placeholder="Текст сообщения подписчикам..."></textarea>
+  <div class="row" style="margin-top:8px">
+    <button onclick="broadcast()">📢 Отправить всем</button>
+    <span id="bc-msg" style="color:var(--muted);font-size:12px"></span>
+  </div>
+</div>
+
+<div class="section"><h2>Счёт</h2>
+  <div class="cards" style="margin-bottom:0">
+    <div class="card"><div class="label">Баланс</div><div class="value" id="acc-b">—</div></div>
+    <div class="card"><div class="label">Свободная маржа</div><div class="value" id="acc-f">—</div><div class="note" id="acc-m"></div></div>
+    <div class="card"><div class="label">Margin Level</div><div class="value" id="acc-ml">—</div></div>
+    <div class="card"><div class="label">Тренд 24ч</div><div class="value" id="acc-trend" style="font-size:16px">—</div></div>
+    <div class="card"><div class="label">Затраты (ком.+свопы)</div><div class="value" id="acc-costs">—</div></div>
+  </div>
+</div>
+
+<div class="section"><h2>Equity (24ч)</h2><canvas id="eqChart" height="70"></canvas></div>
+
+<div class="section"><h2>Подписчики (чат-id)</h2><div id="subs" style="font-size:13px;color:var(--muted)">—</div></div>
+
+<div class="section"><h2>События</h2><div class="events" id="events">—</div></div>
+
+<script>
+const fmt=(x,d=2)=>(x===null||x===undefined)?'—':Number(x).toFixed(d);
+const cls=x=>x>0?'pos':(x<0?'neg':'');
+const sign=x=>(x>=0?'+':'')+'$'+fmt(x);
+let chart=null;
+async function load(){
+  try{
+    const [sum,eq,subs,ev]=await Promise.all([
+      fetch('/api/summary').then(r=>r.json()),
+      fetch('/api/equity?hours=24').then(r=>r.json()),
+      fetch('/api/admin/subscribers').then(r=>r.json()),
+      fetch('/api/events?limit=50').then(r=>r.json()),
+    ]);
+    const s=sum.snapshot||{}, st=sum.state;
+    const el=document.getElementById('st-status');
+    if(st.halted){el.innerHTML='<span class="pill p-red">ОСТАНОВЛЕН</span>';document.getElementById('st-note').textContent=st.halted_reason;}
+    else if(st.trend_paused){el.innerHTML='<span class="pill p-gold">Пауза тренда</span>';}
+    else if(st.weekend_flat){el.innerHTML='<span class="pill p-gold">Weekend</span>';}
+    else{el.innerHTML='<span class="pill p-green">Торгует</span>';}
+    const pnl=sum.stats.realized_pnl;
+    document.getElementById('st-pnl').textContent=sign(pnl);
+    document.getElementById('st-pnl').className='value '+cls(pnl);
+    document.getElementById('st-pairs').textContent=sum.stats.closed_pairs+' пар закрыто · затраты $'+fmt(sum.stats.total_costs);
+    document.getElementById('st-eq').textContent='$'+fmt(s.equity);
+    document.getElementById('st-bal').textContent='баланс $'+fmt(s.balance)+' · плавающий '+(s.floating!=null?sign(s.floating):'—');
+    document.getElementById('st-grid').textContent=(s.buy_levels!=null?s.buy_levels:'—')+' / '+sum.grid.levels+' ур.';
+    document.getElementById('st-pos').textContent=(s.positions||0)+' позиций';
+    document.getElementById('st-subs').textContent=subs.count;
+    document.getElementById('subs').textContent=subs.ids.join(', ')||'—';
+    document.getElementById('acc-b').textContent='$'+fmt(s.balance);
+    document.getElementById('acc-f').textContent='$'+fmt(s.margin_free);
+    document.getElementById('acc-m').textContent='занято: $'+fmt(s.margin);
+    document.getElementById('acc-ml').textContent=s.margin_level?fmt(s.margin_level,0)+'%':'—';
+    document.getElementById('acc-trend').textContent=s.trend!=null?fmt(s.trend)+'%':'—';
+    document.getElementById('acc-costs').textContent='$'+fmt(sum.stats.total_costs);
+    const labels=eq.map(r=>r.ts.slice(11,16)), data=eq.map(r=>r.equity);
+    if(chart)chart.destroy();
+    chart=new Chart(document.getElementById('eqChart'),{type:'line',
+      data:{labels,datasets:[{data,borderColor:'#388bfd',backgroundColor:'rgba(56,139,253,.1)',fill:true,pointRadius:0,tension:.2}]},
+      options:{plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}},x:{ticks:{color:'#8b949e',maxTicksLimit:10},grid:{display:false}}}}});
+    document.getElementById('events').innerHTML=ev.map(r=>`<div><span class="ts">${r.ts}</span>${r.message}</div>`).join('')||'—';
+    document.getElementById('updated').textContent='обновлено '+new Date().toLocaleTimeString();
+  }catch(e){document.getElementById('updated').textContent='ошибка: '+e;}
+}
+async function botAction(a){
+  const r=await fetch('/api/admin/bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:a})});
+  document.getElementById('ctrl-msg').textContent=r.ok?'команда отправлена, исполнится в течение 20 сек':'ошибка';
+}
+async function broadcast(){
+  const t=document.getElementById('bc-text').value.trim();
+  if(!t){document.getElementById('bc-msg').textContent='пусто';return;}
+  const r=await fetch('/api/admin/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})});
+  document.getElementById('bc-msg').textContent=r.ok?'поставлено в очередь':'ошибка';
+  if(r.ok)document.getElementById('bc-text').value='';
+}
+load(); setInterval(load,10000);
+</script>
+</body>
+</html>

@@ -61,6 +61,30 @@ def cmd_dry_run():
     gw.shutdown()
 
 
+def handle_cmd_file(bot):
+    """Команды из админ-панели (data/cmd.json) исполняет сам цикл бота — без гонок."""
+    import json as _json
+    cmd_file = config.DATA_DIR / "cmd.json"
+    if not cmd_file.exists():
+        return
+    try:
+        cmd = _json.loads(cmd_file.read_text(encoding="utf-8"))
+    except _json.JSONDecodeError:
+        cmd_file.unlink(missing_ok=True)
+        return
+    cmd_file.unlink(missing_ok=True)
+    action = cmd.get("action")
+    log.info("cmd from admin panel: %s", action)
+    if action == "stop":
+        bot._halt("стоп из админ-панели")
+        bot.shutdown_terminal()
+    elif action == "start":
+        bot.resume()
+    elif action == "broadcast":
+        from .notifier import send
+        send("📢 " + cmd.get("text", ""))
+
+
 def cmd_run():
     storage.init_db()
     _connect_and_prepare()
@@ -80,6 +104,7 @@ def cmd_run():
                     tg("⚠️ MT5 недоступен, повтор через цикл")
                 else:
                     gw.ensure_symbol()
+            handle_cmd_file(bot)
             bot.run_once()
         except KeyboardInterrupt:
             raise
