@@ -78,17 +78,17 @@ if PROFILE == "MICRO":
     GUARD_DAILY_LOSS_PCT = 0.05
 
 # --- Скальпинг (PROFILE=SCALP) ---
-SCALP_TP_USD = float(os.getenv("SCALP_TP_USD", "2.0"))    # тейк $2
-SCALP_SL_USD = float(os.getenv("SCALP_SL_USD", "1.0"))    # стоп $1
+SCALP_TP_USD = float(os.getenv("SCALP_TP_USD", "3.0"))    # тейк $3
+SCALP_SL_USD = float(os.getenv("SCALP_SL_USD", "2.0"))    # стоп $2 (был $1 — почти = спреду, ложные выбивания)
 SCALP_LOT = float(os.getenv("SCALP_LOT", "0.01"))
 SCALP_EMA_FAST = 9
 SCALP_EMA_SLOW = 21
 SCALP_RSI_PERIOD = 14
 SCALP_RSI_LONG_MIN = 45.0    # лонг только если импульс есть
 SCALP_RSI_SHORT_MAX = 55.0
-SCALP_MAX_TRADES_DAY = int(os.getenv("SCALP_MAX_TRADES_DAY", "30"))
+SCALP_MAX_TRADES_DAY = int(os.getenv("SCALP_MAX_TRADES_DAY", "60"))
 SCALP_MAX_OPEN = 2           # одновременно открытых позиций
-SCALP_COOLDOWN_SEC = 180     # пауза между входами
+SCALP_COOLDOWN_SEC = 120     # пауза между входами (было 180 — снижена под лимит 60/день)
 SCALP_HOUR_FROM_UTC = 6      # активные часы (лондон+нью-йорк)
 SCALP_HOUR_TO_UTC = 20
 SCALP_MAX_SPREAD_USD = 0.45  # не входить при широком спреде
