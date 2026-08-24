@@ -98,8 +98,8 @@ def cmd_run():
     storage.init_db()
     _connect_and_prepare()
     bot = make_bot()
-    from .notifier import send, poll_commands
-    send(f"🤖 Бот запущен (профиль {config.PROFILE})")
+    from .notifier import send, poll_commands, send_to, chat_id
+    send_to(chat_id(), f"🤖 Бот запущен (профиль {config.PROFILE})")
     log.info("старт цикла: poll %ss, профиль %s", config.POLL_SECONDS, config.PROFILE)
     while True:
         try:

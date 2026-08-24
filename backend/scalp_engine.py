@@ -45,6 +45,7 @@ class ScalpBot:
         self.state.setdefault("day_anchor", None)
         self.state.setdefault("scalp_cleaned", False)
         self.state.setdefault("last_trade_ts", 0.0)
+        self.state.setdefault("scalp_signals", False)  # трансляция в канал — включаем вручную
 
     def _save(self):
         storage.state_save(self.state)
@@ -210,7 +211,8 @@ class ScalpBot:
         self.state.update(halted=False, halted_reason="", watermark=None, day_anchor=None)
         self._save()
         from .notifier import send
-        send("▶️ Скальпер возобновлён.")
+        if self.state.get("scalp_signals"):
+            send("▶️ Скальпер возобновлён.")
 
     def shutdown_terminal(self):
         from .grid_engine import GridBot  # общий механизм
