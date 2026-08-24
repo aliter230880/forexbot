@@ -63,8 +63,9 @@ GUARD_CHECK_SECONDS = 60
 DIGEST_HOUR_UTC = 8           # ежедневный дайджест в 8:00 UTC (11:00 МСК)
 
 # --- Профили ---
-# PROFILE=MICRO — пресет под микродепозит $100-150 (свой экземпляр бота):
-# шире шаг/TP, жёстче тренд-пауза и стоп сетки.
+# PROFILE=STANDARD — сетка (мастер)
+# PROFILE=MICRO   — сетка под микродепозит $100-150
+# PROFILE=SCALP   — скальпинг M1: TP $2 / SL $1, до 30 сделок/день
 PROFILE = os.getenv("PROFILE", "STANDARD")
 if PROFILE == "MICRO":
     GRID_LEVELS = 5
@@ -75,6 +76,22 @@ if PROFILE == "MICRO":
     TREND_RESUME_PCT = -1.0
     GUARD_EQUITY_DD_STOP = 0.15   # стоп сетки -15% депозита
     GUARD_DAILY_LOSS_PCT = 0.05
+
+# --- Скальпинг (PROFILE=SCALP) ---
+SCALP_TP_USD = float(os.getenv("SCALP_TP_USD", "2.0"))    # тейк $2
+SCALP_SL_USD = float(os.getenv("SCALP_SL_USD", "1.0"))    # стоп $1
+SCALP_LOT = float(os.getenv("SCALP_LOT", "0.01"))
+SCALP_EMA_FAST = 9
+SCALP_EMA_SLOW = 21
+SCALP_RSI_PERIOD = 14
+SCALP_RSI_LONG_MIN = 45.0    # лонг только если импульс есть
+SCALP_RSI_SHORT_MAX = 55.0
+SCALP_MAX_TRADES_DAY = int(os.getenv("SCALP_MAX_TRADES_DAY", "30"))
+SCALP_MAX_OPEN = 2           # одновременно открытых позиций
+SCALP_COOLDOWN_SEC = 180     # пауза между входами
+SCALP_HOUR_FROM_UTC = 6      # активные часы (лондон+нью-йорк)
+SCALP_HOUR_TO_UTC = 20
+SCALP_MAX_SPREAD_USD = 0.45  # не входить при широком спреде
 
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")  # в .env

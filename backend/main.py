@@ -34,12 +34,21 @@ def _connect_and_prepare():
     log.info("symbol %s spec: %s", config.SYMBOL, spec)
 
 
+def make_bot():
+    if config.PROFILE == "SCALP":
+        from .scalp_engine import ScalpBot
+        return ScalpBot()
+    return GridBot()
+
+
 def cmd_status():
     _connect_and_prepare()
-    bot = GridBot()
-    bot.sync_fills()
-    print(json.dumps(bot.status(), indent=2, ensure_ascii=False))
-    print("trend 24h:", bot.trend_change_pct(), "%")
+    bot = make_bot()
+    if config.PROFILE != "SCALP":
+        bot.sync_fills()
+    else:
+        bot.sync_closed()
+    print(json.dumps(bot.status(), indent=2, ensure_ascii=False, default=str))
     gw.shutdown()
 
 
@@ -88,10 +97,10 @@ def handle_cmd_file(bot):
 def cmd_run():
     storage.init_db()
     _connect_and_prepare()
-    bot = GridBot()
+    bot = make_bot()
     from .notifier import send, poll_commands
-    send("🤖 Forex grid bot запущен (демо)")
-    log.info("старт цикла: poll %ss", config.POLL_SECONDS)
+    send(f"🤖 Бот запущен (профиль {config.PROFILE})")
+    log.info("старт цикла: poll %ss, профиль %s", config.POLL_SECONDS, config.PROFILE)
     while True:
         try:
             # watchdog: терминал мог закрыться — переподключаемся,

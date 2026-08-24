@@ -64,11 +64,22 @@ def admin_page():
 
 @app.get("/api/summary")
 def summary():
-    s = storage.stats()
-    snap = _row(storage.snapshot_latest())
     state = storage.state_load()
+    snap = _row(storage.snapshot_latest())
+    if config.PROFILE == "SCALP":
+        s = storage.scalp_stats()
+        stats = {"realized_pnl": s["realized_pnl"], "total_costs": 0.0,
+                 "closed_pairs": s["closed_trades"], "open_pairs": s["open_trades"],
+                 "winrate": s["winrate"], "trades_today": s["trades_today"]}
+        grid = {"levels": config.SCALP_MAX_TRADES_DAY, "step_usd": config.SCALP_TP_USD,
+                "lot": config.SCALP_LOT, "tp_usd": config.SCALP_TP_USD}
+    else:
+        stats = storage.stats()
+        grid = {"levels": config.GRID_LEVELS, "step_usd": config.GRID_STEP_USD,
+                "lot": config.GRID_LOT, "tp_usd": config.TP_USD}
     return JSONResponse({
-        "stats": s,
+        "profile": config.PROFILE,
+        "stats": stats,
         "snapshot": snap,
         "state": {
             "halted": state.get("halted", False),
@@ -77,10 +88,7 @@ def summary():
             "weekend_flat": state.get("weekend_flat", False),
         },
         "symbol": config.SYMBOL,
-        "grid": {
-            "levels": config.GRID_LEVELS, "step_usd": config.GRID_STEP_USD,
-            "lot": config.GRID_LOT, "tp_usd": config.TP_USD,
-        },
+        "grid": grid,
     })
 
 
@@ -92,6 +100,13 @@ def equity(hours: int = 24):
 
 @app.get("/api/pairs")
 def pairs(status: str = "closed", limit: int = 100):
+    if config.PROFILE == "SCALP":
+        rows = storage.scalp_closed(limit)
+        return JSONResponse([
+            {"buy_price": r["entry"], "sell_price": r["exit"], "lot": config.SCALP_LOT,
+             "pnl": r["pnl"], "costs": 0.0, "close_time": r["close_time"],
+             "open_time": r["open_time"], "buy_ticket": r["ticket"], "side": r["side"],
+             "status": r["status"]} for r in rows])
     if status == "open":
         rows = storage.open_pairs()
     else:
