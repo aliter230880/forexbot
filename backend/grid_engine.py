@@ -238,8 +238,12 @@ class GridBot:
         flat = self.state["weekend_flat"]
         in_close_window = (now.weekday() == config.WEEKEND_CLOSE_DOW
                            and now.hour >= config.WEEKEND_CLOSE_HOUR_UTC)
-        in_open_window = (now.weekday() == config.WEEKEND_OPEN_DOW
-                          and now.hour >= config.WEEKEND_OPEN_HOUR_UTC)
+        # рынок открыт: пн-чт, пятница до закрытия, воскресенье после 22 UTC.
+        # Широкое окно, чтобы сброс weekend flat не зависел от того,
+        # был ли бот жив ровно в момент открытия рынка.
+        market_open = (now.weekday() in (0, 1, 2, 3)
+                       or (now.weekday() == 4 and now.hour < config.WEEKEND_CLOSE_HOUR_UTC)
+                       or (now.weekday() == 6 and now.hour >= config.WEEKEND_OPEN_HOUR_UTC))
         if in_close_window and not flat:
             for o in gw.open_orders(storage.MAGIC):
                 gw.cancel(o.ticket)
@@ -254,12 +258,12 @@ class GridBot:
                  "Воскресенье ~22:05 UTC — возобновление.")
             log.warning("WEEKEND FLAT applied")
             self._save()
-        elif in_open_window and flat:
+        elif flat and market_open:
             self.state["weekend_flat"] = False
             self.state["day_anchor"] = None  # новый день
-            storage.log_event("weekend", "выходные закончились, ресет")
+            storage.log_event("weekend", "рынок открыт — возобновление после выходных")
             from .notifier import send
-            send("🗓 Выходные закончились — торговля возобновляется, сетка будет восстановлена")
+            send("🗓 Рынок открыт — торговля возобновляется, сетка будет восстановлена")
             log.info("Weekend over")
             self._save()
 
