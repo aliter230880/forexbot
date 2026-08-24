@@ -15,9 +15,6 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from . import config, storage
 
-ADMIN_USER = "dim230880"
-ADMIN_PASS = "Dim_230880"
-
 app = FastAPI(title="Forex Grid Bot")
 
 
@@ -27,10 +24,11 @@ async def basic_auth(request: Request, call_next):
     if path.startswith("/admin") or path.startswith("/api/admin"):
         auth = request.headers.get("Authorization", "")
         ok = False
-        if auth.startswith("Basic "):
+        if auth.startswith("Basic ") and config.ADMIN_PASS:
             try:
                 user, _, pwd = base64.b64decode(auth[6:]).decode().partition(":")
-                ok = secrets.compare_digest(user, ADMIN_USER) and secrets.compare_digest(pwd, ADMIN_PASS)
+                ok = (secrets.compare_digest(user, config.ADMIN_USER)
+                      and secrets.compare_digest(pwd, config.ADMIN_PASS))
             except Exception:  # noqa: BLE001
                 ok = False
         if not ok:
@@ -142,4 +140,4 @@ async def bot_control(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=config.WEB_PORT, log_level="warning")

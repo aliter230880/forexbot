@@ -67,5 +67,10 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")  # в .env
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # авто-привязка по первому /start
 TELEGRAM_CHANNEL = os.getenv("TELEGRAM_CHANNEL", "@forex_vip_first")  # пусто → рассылка подписчикам
 
+# --- Админ-панель ---
+ADMIN_USER = os.getenv("ADMIN_USER", "dim230880")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "")  # в .env
+WEB_PORT = int(os.getenv("WEB_PORT", "8181"))
+
 DB_PATH = DATA_DIR / "bot.db"
 STATE_PATH = DATA_DIR / "state.json"
