@@ -62,6 +62,20 @@ POLL_SECONDS = 20             # основной цикл движка
 GUARD_CHECK_SECONDS = 60
 DIGEST_HOUR_UTC = 8           # ежедневный дайджест в 8:00 UTC (11:00 МСК)
 
+# --- Профили ---
+# PROFILE=MICRO — пресет под микродепозит $100-150 (свой экземпляр бота):
+# шире шаг/TP, жёстче тренд-пауза и стоп сетки.
+PROFILE = os.getenv("PROFILE", "STANDARD")
+if PROFILE == "MICRO":
+    GRID_LEVELS = 5
+    GRID_STEP_USD = 8.0
+    TP_USD = 8.0
+    GRID_LOT = 0.01
+    TREND_DROP_PCT = -2.0
+    TREND_RESUME_PCT = -1.0
+    GUARD_EQUITY_DD_STOP = 0.15   # стоп сетки -15% депозита
+    GUARD_DAILY_LOSS_PCT = 0.05
+
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")  # в .env
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # авто-привязка по первому /start
