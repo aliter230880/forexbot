@@ -7,6 +7,7 @@ Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
   Where-Object {
     $_.CommandLine -like "*backend.main *" -or
     $_.CommandLine -like "*backend.main_multi*" -or
+    $_.CommandLine -like "*backend.main_hybrid*" -or
     $_.CommandLine -like "*backend.webapp*"
   } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
@@ -22,6 +23,11 @@ Write-Output "bot started (detached)"
 Start-Process -FilePath $py -ArgumentList "-m", "backend.main_multi", "run" `
   -WorkingDirectory $dir -WindowStyle Hidden
 Write-Output "multi bot started (detached)"
+
+# гибрид: лимитки сетки + жёсткий SL (стратегия №3, без трансляций)
+Start-Process -FilePath $py -ArgumentList "-m", "backend.main_hybrid", "run" `
+  -WorkingDirectory $dir -WindowStyle Hidden
+Write-Output "hybrid bot started (detached)"
 
 # дашборд + админка
 Start-Process -FilePath $py -ArgumentList "-m", "backend.webapp" `

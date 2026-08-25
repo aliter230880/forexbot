@@ -133,6 +133,39 @@ MULTI_TEST_BALANCE = float(os.getenv("MULTI_TEST_BALANCE", "100"))
 MULTI_MAX_RISK_PCT = float(os.getenv("MULTI_MAX_RISK_PCT", "2.5"))
 MULTI_ENFORCE_RISK = os.getenv("MULTI_ENFORCE_RISK", "1") == "1"
 
+# --- ГИБРИД (hybrid_engine.py): лимитные входы сетки + жёсткий SL скальпинга ---
+# Обоснование (research_hybrid.py, 30 торговых дней золота):
+#   лимитка не платит спред на догоне → при TP $4 спред $0.35 = 8.7% от цели
+#   (у скальпинга с целью $1.5 было 25% — отсюда его убыток).
+#   Найденная конфигурация: 14-16 сделок/день, WR ~78%, PF 1.36.
+# ⚠️ Стресс-тест на развёрнутом (падающем) рынке: без ограничений — маржин-колл.
+#   Поэтому max 3 позиции + аварийный выход корзины + лимит риска корзины.
+HYBRID_MAGIC = 20260826
+HYBRID_SYMBOLS = os.getenv("HYBRID_SYMBOLS", "XAUUSD.s,NAS100.s,GER40.s").split(",")
+HYBRID_LOT = float(os.getenv("HYBRID_LOT", "0.01"))
+HYBRID_STEP_ATR = float(os.getenv("HYBRID_STEP_ATR", "1.0"))   # шаг сетки = ATR(M5) x N
+HYBRID_TP_ATR = float(os.getenv("HYBRID_TP_ATR", "1.0"))       # тейк = шаг
+HYBRID_SL_ATR = float(os.getenv("HYBRID_SL_ATR", "2.5"))       # стоп позиции = ATR x N
+HYBRID_MAX_POS_PER_SYMBOL = int(os.getenv("HYBRID_MAX_POS_PER_SYMBOL", "3"))
+HYBRID_MAX_POS_TOTAL = int(os.getenv("HYBRID_MAX_POS_TOTAL", "6"))
+HYBRID_LEVELS = int(os.getenv("HYBRID_LEVELS", "3"))           # активных лимиток на символ
+HYBRID_REBUILD_SEC = int(os.getenv("HYBRID_REBUILD_SEC", "900"))  # пересборка сетки
+HYBRID_TEST_BALANCE = float(os.getenv("HYBRID_TEST_BALANCE", "100"))
+HYBRID_MAX_BASKET_RISK_PCT = float(os.getenv("HYBRID_MAX_BASKET_RISK_PCT", "25"))
+HYBRID_MAX_POS_RISK_PCT = float(os.getenv("HYBRID_MAX_POS_RISK_PCT", "10"))
+# главный урок скальпинга: спред 25% от цели = гарантированный убыток.
+# Лимитка платит спред один раз, но цель всё равно должна быть кратно больше спреда.
+HYBRID_MAX_SPREAD_PCT_OF_TP = float(os.getenv("HYBRID_MAX_SPREAD_PCT_OF_TP", "12"))
+# цель не меньше N спредов (адаптивная): у индексов ATR-цель выходила $0.05 при
+# спреде $0.025 = 46%. При 10 спредах доля спреда в цели гарантированно ≤10%.
+HYBRID_MIN_TP_SPREADS = float(os.getenv("HYBRID_MIN_TP_SPREADS", "10"))
+HYBRID_DAILY_LOSS_PCT = float(os.getenv("HYBRID_DAILY_LOSS_PCT", "8"))
+HYBRID_HOUR_FROM_UTC = 6
+HYBRID_HOUR_TO_UTC = 20
+HYBRID_WEEKEND_CLOSE_HOUR = 22   # пятница: флэт
+HYBRID_STATE_FILE = "state_hybrid.json"
+HYBRID_DB_VERSION = "hybrid"
+
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")  # в .env
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # авто-привязка по первому /start

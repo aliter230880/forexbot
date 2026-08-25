@@ -212,13 +212,13 @@ def scalp_open_trades() -> list:
     """Только одиночный скальпер (мульти-бот живёт под version='multi')."""
     with get_conn() as c:
         return c.execute("SELECT * FROM scalp_trades WHERE status='open' "
-                         "AND COALESCE(version,'') <> 'multi'").fetchall()
+                         "AND COALESCE(version,'') NOT IN ('multi','hybrid')").fetchall()
 
 
 def scalp_closed(limit: int = 100) -> list:
     with get_conn() as c:
         return c.execute("SELECT * FROM scalp_trades WHERE status='closed' "
-                         "AND COALESCE(version,'') <> 'multi' "
+                         "AND COALESCE(version,'') NOT IN ('multi','hybrid') "
                          "ORDER BY close_time DESC LIMIT ?", (limit,)).fetchall()
 
 
@@ -249,6 +249,49 @@ def multi_stats() -> dict:
         }
 
 
+def hybrid_stats() -> dict:
+    """Статистика гибрида (version='hybrid') с разбивкой по символам."""
+    with get_conn() as c:
+        r = c.execute("""SELECT COUNT(*) n, COALESCE(SUM(pnl),0) pnl,
+                           SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) wins
+                         FROM scalp_trades WHERE status='closed' AND version='hybrid'""").fetchone()
+        o = c.execute("SELECT COUNT(*) n FROM scalp_trades "
+                      "WHERE status='open' AND version='hybrid'").fetchone()
+        today = _now()[:10]
+        t = c.execute("SELECT COUNT(*) n FROM scalp_trades "
+                      "WHERE version='hybrid' AND open_time LIKE ?", (today + "%",)).fetchone()
+        tp = c.execute("""SELECT COALESCE(SUM(pnl),0) p FROM scalp_trades
+                          WHERE version='hybrid' AND status='closed'
+                          AND close_time LIKE ?""", (today + "%",)).fetchone()
+        per = c.execute("""SELECT symbol, COUNT(*) n, COALESCE(SUM(pnl),0) pnl,
+                             SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) wins
+                           FROM scalp_trades WHERE status='closed' AND version='hybrid'
+                           GROUP BY symbol ORDER BY pnl DESC""").fetchall()
+        n, wins = r["n"], r["wins"] or 0
+        return {
+            "closed_trades": n, "realized_pnl": round(r["pnl"], 2),
+            "open_trades": o["n"], "trades_today": t["n"],
+            "pnl_today": round(tp["p"], 2),
+            "winrate": round(100 * wins / n, 1) if n else 0.0,
+            "per_symbol": [
+                {"symbol": p["symbol"], "trades": p["n"], "pnl": round(p["pnl"], 2),
+                 "winrate": round(100 * (p["wins"] or 0) / p["n"], 1) if p["n"] else 0.0}
+                for p in per],
+        }
+
+
+def hybrid_open_trades() -> list:
+    with get_conn() as c:
+        return c.execute("SELECT * FROM scalp_trades "
+                         "WHERE status='open' AND version='hybrid'").fetchall()
+
+
+def hybrid_closed(limit: int = 50) -> list:
+    with get_conn() as c:
+        return c.execute("SELECT * FROM scalp_trades WHERE status='closed' AND version='hybrid' "
+                         "ORDER BY close_time DESC LIMIT ?", (limit,)).fetchall()
+
+
 def multi_open_trades() -> list:
     with get_conn() as c:
         return c.execute("SELECT * FROM scalp_trades "
@@ -275,12 +318,12 @@ def scalp_stats() -> dict:
         r = c.execute("""SELECT COUNT(*) n, COALESCE(SUM(pnl),0) pnl,
                            SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) wins
                            FROM scalp_trades WHERE status='closed'
-                           AND COALESCE(version,'') <> 'multi'""").fetchone()
+                           AND COALESCE(version,'') NOT IN ('multi','hybrid')""").fetchone()
         o = c.execute("SELECT COUNT(*) n FROM scalp_trades WHERE status='open' "
-                      "AND COALESCE(version,'') <> 'multi'").fetchone()
+                      "AND COALESCE(version,'') NOT IN ('multi','hybrid')").fetchone()
         today = _now()[:10]
         t = c.execute("SELECT COUNT(*) n FROM scalp_trades WHERE open_time LIKE ? "
-                      "AND COALESCE(version,'') <> 'multi'", (today + "%",)).fetchone()
+                      "AND COALESCE(version,'') NOT IN ('multi','hybrid')", (today + "%",)).fetchone()
         n, wins = r["n"], r["wins"] or 0
         return {"closed_trades": n, "realized_pnl": round(r["pnl"], 2),
                 "open_trades": o["n"], "trades_today": t["n"],

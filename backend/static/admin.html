@@ -57,6 +57,32 @@
   </div>
 </div>
 
+<div class="section" style="border-color:#2ea043"><h2>🔀 ГИБРИД — лимитки сетки + жёсткий SL (стратегия №3)</h2>
+  <div class="cards" style="margin-bottom:12px">
+    <div class="card"><div class="label">Статус</div><div class="value" id="hy-status" style="font-size:15px">—</div><div class="note" id="hy-note"></div></div>
+    <div class="card"><div class="label">Сделок сегодня</div><div class="value" id="hy-today">—</div><div class="note" id="hy-pnl-today"></div></div>
+    <div class="card"><div class="label">Winrate</div><div class="value" id="hy-wr">—</div><div class="note" id="hy-closed"></div></div>
+    <div class="card"><div class="label">Реализовано</div><div class="value" id="hy-pnl">—</div><div class="note" id="hy-open"></div></div>
+    <div class="card"><div class="label">Риск корзины</div><div class="value" id="hy-risk" style="font-size:16px">—</div><div class="note" id="hy-risk-note"></div></div>
+    <div class="card"><div class="label">Тренды H1</div><div class="value" id="hy-trends" style="font-size:13px">—</div><div class="note">сетка ставится по тренду</div></div>
+  </div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="danger" onclick="hybridControl('stop')">🛑 Стоп гибрида</button>
+    <button class="ok" onclick="hybridControl('start')">▶️ Запустить гибрид</button>
+    <span id="hy-msg" style="color:var(--muted);font-size:12px"></span>
+  </div>
+  <div id="hy-warn" style="font-size:12px;color:var(--gold);margin-bottom:10px"></div>
+  <h2 style="margin-top:14px">По инструментам</h2>
+  <table><thead><tr><th>Инструмент</th><th>Сделок</th><th>Winrate</th><th>PnL</th></tr></thead>
+    <tbody id="hy-per-symbol"></tbody></table>
+  <h2 style="margin-top:14px">Открытые позиции</h2>
+  <table><thead><tr><th>Открыта</th><th>Инстр.</th><th>Сторона</th><th>Вход</th><th>SL</th><th>TP</th></tr></thead>
+    <tbody id="hy-open-tbl"></tbody></table>
+  <h2 style="margin-top:14px">Последние закрытые</h2>
+  <table><thead><tr><th>Закрыта</th><th>Инстр.</th><th>Сторона</th><th>Вход</th><th>Выход</th><th>Причина</th><th>PnL</th></tr></thead>
+    <tbody id="hy-closed-tbl"></tbody></table>
+</div>
+
 <div class="section" style="border-color:#388bfd"><h2>🌐 Мульти-символьный бот (тест для мини-баланса)</h2>
   <div class="cards" style="margin-bottom:12px">
     <div class="card"><div class="label">Статус</div><div class="value" id="mu-status" style="font-size:15px">—</div><div class="note" id="mu-note"></div></div>
@@ -133,13 +159,14 @@ const sign=x=>(x>=0?'+':'')+'$'+fmt(x);
 let chart=null;
 async function load(){
   try{
-    const [sum,eq,subs,ev,sc,mu]=await Promise.all([
+    const [sum,eq,subs,ev,sc,mu,hy]=await Promise.all([
       fetch('/api/summary').then(r=>r.json()),
       fetch('/api/equity?hours=24').then(r=>r.json()),
       fetch('/api/admin/subscribers').then(r=>r.json()),
       fetch('/api/events?limit=50').then(r=>r.json()),
       fetch('/api/admin/scalp').then(r=>r.json()).catch(()=>null),
       fetch('/api/admin/multi').then(r=>r.json()).catch(()=>null),
+      fetch('/api/admin/hybrid').then(r=>r.json()).catch(()=>null),
     ]);
     const s=sum.snapshot||{}, st=sum.state;
     const el=document.getElementById('st-status');
@@ -216,6 +243,37 @@ async function load(){
       ).join('')||'<tr><td colspan="8" style="color:var(--muted)">пока пусто</td></tr>';
     }
 
+    if(hy){
+      const hs=hy.stats;
+      document.getElementById('hy-status').innerHTML=hy.halted
+        ?'<span class="pill p-red">ОСТАНОВЛЕН</span>'
+        :(hy.weekend_flat?'<span class="pill p-gold">Weekend flat</span>'
+                         :'<span class="pill p-green">Торгует</span>');
+      document.getElementById('hy-note').textContent=hy.halted?hy.halted_reason:hy.symbols.join(' · ');
+      document.getElementById('hy-today').textContent=hs.trades_today;
+      document.getElementById('hy-pnl-today').textContent='за день '+sign(hs.pnl_today);
+      document.getElementById('hy-wr').textContent=hs.winrate+'%';
+      document.getElementById('hy-closed').textContent=hs.closed_trades+' сделок закрыто';
+      document.getElementById('hy-pnl').textContent=sign(hs.realized_pnl);
+      document.getElementById('hy-pnl').className='value '+cls(hs.realized_pnl);
+      document.getElementById('hy-open').textContent=hs.open_trades+' открыто · лот '+hy.lot;
+      document.getElementById('hy-risk').textContent=(hy.basket_risk_pct!=null?hy.basket_risk_pct:'—')+'% / '+hy.max_basket_risk_pct+'%';
+      document.getElementById('hy-risk-note').textContent='база $'+hy.test_balance+' · дн. стоп '+hy.daily_loss_pct+'%';
+      document.getElementById('hy-trends').textContent=Object.entries(hy.grid_trend||{}).map(([k,v])=>k.replace('.s','')+':'+v).join(' ')||'—';
+      const hw=[];
+      for(const [s,r] of Object.entries(hy.skipped||{})) hw.push('⚠️ '+(s==='_basket'?'корзина':s)+': '+r);
+      document.getElementById('hy-warn').innerHTML=hw.join('<br>');
+      document.getElementById('hy-per-symbol').innerHTML=(hs.per_symbol||[]).map(p=>
+        `<tr><td>${p.symbol||'?'}</td><td>${p.trades}</td><td>${p.winrate}%</td><td class="${cls(p.pnl)}">${sign(p.pnl)}</td></tr>`
+      ).join('')||'<tr><td colspan="4" style="color:var(--muted)">пока нет закрытых сделок</td></tr>';
+      document.getElementById('hy-open-tbl').innerHTML=(hy.open||[]).map(r=>
+        `<tr><td>${r.open_time||''}</td><td>${r.symbol||''}</td><td>${r.side}</td><td>${r.entry}</td><td>${r.sl}</td><td>${r.tp}</td></tr>`
+      ).join('')||'<tr><td colspan="6" style="color:var(--muted)">нет открытых</td></tr>';
+      document.getElementById('hy-closed-tbl').innerHTML=(hy.closed||[]).map(r=>
+        `<tr><td>${r.close_time||''}</td><td>${r.symbol||''}</td><td>${r.side}</td><td>${r.entry}</td><td>${r.exit}</td><td>${(r.reason||'').toUpperCase()}</td><td class="${cls(r.pnl)}">${sign(r.pnl)}</td></tr>`
+      ).join('')||'<tr><td colspan="7" style="color:var(--muted)">пока пусто</td></tr>';
+    }
+
     document.getElementById('updated').textContent='обновлено '+new Date().toLocaleTimeString();
   }catch(e){document.getElementById('updated').textContent='ошибка: '+e;}
 }
@@ -229,6 +287,10 @@ async function broadcast(){
   const r=await fetch('/api/admin/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})});
   document.getElementById('bc-msg').textContent=r.ok?'поставлено в очередь':'ошибка';
   if(r.ok)document.getElementById('bc-text').value='';
+}
+async function hybridControl(a){
+  const r=await fetch('/api/admin/hybrid/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:a})});
+  document.getElementById('hy-msg').textContent=r.ok?'команда отправлена, применится в течение 20 сек':'ошибка';
 }
 async function multiControl(a){
   const r=await fetch('/api/admin/multi/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:a})});

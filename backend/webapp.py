@@ -163,6 +163,46 @@ async def bot_control(request: Request):
     return JSONResponse({"ok": True, "queued": action})
 
 
+@app.get("/api/admin/hybrid")
+def admin_hybrid():
+    """Прогресс гибрида (стратегия №3): лимитки + жёсткий SL."""
+    import json as _json
+    try:
+        state = _json.loads(
+            (config.DATA_DIR / config.HYBRID_STATE_FILE).read_text(encoding="utf-8"))
+    except (FileNotFoundError, _json.JSONDecodeError):
+        state = {}
+    return JSONResponse({
+        "symbols": [s.strip() for s in config.HYBRID_SYMBOLS],
+        "lot": config.HYBRID_LOT,
+        "test_balance": config.HYBRID_TEST_BALANCE,
+        "max_pos_per_symbol": config.HYBRID_MAX_POS_PER_SYMBOL,
+        "max_pos_total": config.HYBRID_MAX_POS_TOTAL,
+        "max_basket_risk_pct": config.HYBRID_MAX_BASKET_RISK_PCT,
+        "daily_loss_pct": config.HYBRID_DAILY_LOSS_PCT,
+        "halted": state.get("halted", False),
+        "halted_reason": state.get("halted_reason", ""),
+        "weekend_flat": state.get("weekend_flat", False),
+        "grid_trend": state.get("grid_trend", {}),
+        "skipped": state.get("skipped", {}),
+        "basket_risk_pct": state.get("basket_risk_pct"),
+        "stats": storage.hybrid_stats(),
+        "open": [_row(r) for r in storage.hybrid_open_trades()],
+        "closed": [_row(r) for r in storage.hybrid_closed(50)],
+    })
+
+
+@app.post("/api/admin/hybrid/control")
+async def hybrid_control(request: Request):
+    body = await request.json()
+    action = body.get("action")
+    if action not in ("start", "stop"):
+        return JSONResponse({"ok": False, "error": "action: start|stop"}, status_code=400)
+    (config.DATA_DIR / "cmd_hybrid.json").write_text(
+        json.dumps({"action": action}), encoding="utf-8")
+    return JSONResponse({"ok": True, "queued": action})
+
+
 @app.get("/api/admin/multi")
 def admin_multi():
     """Прогресс мульти-символьного бота (без трансляций, только для админки)."""
