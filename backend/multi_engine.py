@@ -183,6 +183,13 @@ class MultiBot:
         entry = tick.ask if is_long else tick.bid
         sl_dist = ctx["atr"] * config.SCALP_ATR_MULT_SL
         tp_dist = ctx["atr"] * config.SCALP_ATR_MULT_TP
+        # минимальная дистанция стопа брокера (trade_stops_level) + запас на спред.
+        # Без этого на закрытом/тонком рынке ATR сжимается и ордер отбивается 10016.
+        spread = tick.ask - tick.bid
+        min_dist = info.trade_stops_level * info.point + spread * 1.5
+        if min_dist > 0 and sl_dist < min_dist:
+            sl_dist = min_dist
+            tp_dist = sl_dist * (config.SCALP_ATR_MULT_TP / config.SCALP_ATR_MULT_SL)
         ok, pct = self.risk_ok(symbol, sl_dist)
         if not ok:
             self.state["skipped_risk"][symbol] = (
@@ -223,6 +230,10 @@ class MultiBot:
                 return res.order
             if res and res.retcode != mt5.TRADE_RETCODE_INVALID_FILL:
                 log.error("multi order %s failed: %s %s", symbol, res.retcode, res.comment)
+                # кулдаун на символ, чтобы не долбить брокера каждые 20 сек
+                self.state["last_trade"][symbol] = time.time()
+                self.state["skipped_risk"][symbol] = f"отказ брокера {res.retcode}: {res.comment}"
+                self._save()
                 return None
         return None
 
