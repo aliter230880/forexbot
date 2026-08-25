@@ -78,20 +78,34 @@ if PROFILE == "MICRO":
     GUARD_DAILY_LOSS_PCT = 0.05
 
 # --- Скальпинг (PROFILE=SCALP) ---
-SCALP_TP_USD = float(os.getenv("SCALP_TP_USD", "3.0"))    # тейк $3
-SCALP_SL_USD = float(os.getenv("SCALP_SL_USD", "2.0"))    # стоп $2 (был $1 — почти = спреду, ложные выбивания)
+# v2 (2026-08-25): вход только по тренду H1, ADX-фильтр силы, сигнал на M5, трейлинг.
+# v1 (M1 EMA-откат в обе стороны) провалился: 59 сделок, WR 30.5%, -$28.
+SCALP_ATR_MULT_SL = float(os.getenv("SCALP_ATR_MULT_SL", "1.2"))   # SL = ATR(M5) × 1.2
+SCALP_ATR_MULT_TP = float(os.getenv("SCALP_ATR_MULT_TP", "2.4"))   # TP = ATR(M5) × 2.4 (1:2)
+SCALP_SL_MIN_USD = float(os.getenv("SCALP_SL_MIN_USD", "1.5"))     # но не тесней $1.5 (спред!)
+SCALP_SL_MAX_USD = float(os.getenv("SCALP_SL_MAX_USD", "5.0"))     # и не шире $5
 SCALP_LOT = float(os.getenv("SCALP_LOT", "0.01"))
 SCALP_EMA_FAST = 9
 SCALP_EMA_SLOW = 21
+SCALP_H1_EMA = 50            # старший тренд: цена и EMA9 относительно EMA50 на H1
+SCALP_ADX_PERIOD = 14
+SCALP_ADX_MIN = float(os.getenv("SCALP_ADX_MIN", "22"))  # < 22 → флэт, не торгуем
 SCALP_RSI_PERIOD = 14
-SCALP_RSI_LONG_MIN = 45.0    # лонг только если импульс есть
+SCALP_RSI_LONG_MIN = 45.0
+SCALP_RSI_LONG_MAX = 72.0    # не покупать на перегреве
 SCALP_RSI_SHORT_MAX = 55.0
-SCALP_MAX_TRADES_DAY = int(os.getenv("SCALP_MAX_TRADES_DAY", "60"))
-SCALP_MAX_OPEN = 2           # одновременно открытых позиций
-SCALP_COOLDOWN_SEC = 120     # пауза между входами (было 180 — снижена под лимит 60/день)
-SCALP_HOUR_FROM_UTC = 6      # активные часы (лондон+нью-йорк)
-SCALP_HOUR_TO_UTC = 20
-SCALP_MAX_SPREAD_USD = 0.45  # не входить при широком спреде
+SCALP_RSI_SHORT_MIN = 28.0
+SCALP_MAX_TRADES_DAY = int(os.getenv("SCALP_MAX_TRADES_DAY", "25"))
+SCALP_MAX_OPEN = 1           # одна позиция за раз (качество > количество)
+SCALP_COOLDOWN_SEC = 300     # 5 мин между входами
+SCALP_HOUR_FROM_UTC = 7      # Лондон-открытие
+SCALP_HOUR_TO_UTC = 19       # до вечера NY
+SCALP_MAX_SPREAD_USD = 0.45
+SCALP_MAX_LOSS_STREAK = 3    # 3 стопа подряд → пауза до след. дня
+# трейлинг: при движении в плюс на TRAIL_START переносим SL на TRAIL_LOCK от входа
+SCALP_TRAIL_START = float(os.getenv("SCALP_TRAIL_START", "1.5"))   # $1.5 в плюсе
+SCALP_TRAIL_LOCK = float(os.getenv("SCALP_TRAIL_LOCK", "0.3"))     # SL → вход +$0.3 (безубыток)
+SCALP_TRAIL_STEP = float(os.getenv("SCALP_TRAIL_STEP", "1.0"))     # далее тянем каждые $1
 
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")  # в .env

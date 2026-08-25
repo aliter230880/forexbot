@@ -72,6 +72,13 @@ def init_db():
                 status TEXT DEFAULT 'open'
             )
         """)
+        # аналитика входов: контекст рынка на момент сделки
+        tcols = {r["name"] for r in c.execute("PRAGMA table_info(scalp_trades)")}
+        for col, ddl in (("adx", "REAL"), ("atr", "REAL"), ("h1_trend", "TEXT"),
+                         ("hour_utc", "INTEGER"), ("spread", "REAL"),
+                         ("ema_gap", "REAL"), ("max_favor", "REAL"), ("version", "TEXT")):
+            if col not in tcols:
+                c.execute(f"ALTER TABLE scalp_trades ADD COLUMN {col} {ddl}")
 
 
 def state_load() -> dict:
@@ -171,10 +178,27 @@ def events_recent(limit: int = 30) -> list:
 
 # --- скальперские сделки ---
 
-def scalp_open(ticket: int, side: str, entry: float, sl: float, tp: float):
+def scalp_open(ticket: int, side: str, entry: float, sl: float, tp: float,
+               ctx: dict | None = None):
+    """ctx — контекст входа для аналитики: adx, atr, h1_trend, spread, ema_gap, version."""
+    ctx = ctx or {}
     with get_conn() as c:
-        c.execute("INSERT OR IGNORE INTO scalp_trades (ticket, side, entry, sl, tp, open_time) "
-                  "VALUES (?,?,?,?,?,?)", (ticket, side, entry, sl, tp, _now()))
+        c.execute(
+            "INSERT OR IGNORE INTO scalp_trades "
+            "(ticket, side, entry, sl, tp, open_time, adx, atr, h1_trend, hour_utc, "
+            " spread, ema_gap, version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (ticket, side, entry, sl, tp, _now(), ctx.get("adx"), ctx.get("atr"),
+             ctx.get("h1_trend"), ctx.get("hour_utc"), ctx.get("spread"),
+             ctx.get("ema_gap"), ctx.get("version", "v2")))
+
+
+def scalp_update_sl(ticket: int, sl: float, max_favor: float | None = None):
+    with get_conn() as c:
+        if max_favor is None:
+            c.execute("UPDATE scalp_trades SET sl=? WHERE ticket=?", (sl, ticket))
+        else:
+            c.execute("UPDATE scalp_trades SET sl=?, max_favor=? WHERE ticket=?",
+                      (sl, max_favor, ticket))
 
 
 def scalp_close(ticket: int, exit_price: float, pnl: float, reason: str):
