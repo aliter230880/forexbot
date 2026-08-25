@@ -160,6 +160,43 @@ async def bot_control(request: Request):
     return JSONResponse({"ok": True, "queued": action})
 
 
+@app.get("/api/admin/multi")
+def admin_multi():
+    """Прогресс мульти-символьного бота (без трансляций, только для админки)."""
+    import json as _json
+    state_path = config.DATA_DIR / config.MULTI_STATE_FILE
+    try:
+        state = _json.loads(state_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, _json.JSONDecodeError):
+        state = {}
+    return JSONResponse({
+        "running": (config.DATA_DIR / "multi.log").exists(),
+        "symbols": [s.strip() for s in config.MULTI_SYMBOLS],
+        "lot": config.MULTI_LOT,
+        "test_balance": config.MULTI_TEST_BALANCE,
+        "max_risk_pct": config.MULTI_MAX_RISK_PCT,
+        "max_trades_day": config.MULTI_MAX_TRADES_DAY,
+        "halted": state.get("halted", False),
+        "halted_reason": state.get("halted_reason", ""),
+        "paused_symbols": state.get("paused_symbols", {}),
+        "skipped_risk": state.get("skipped_risk", {}),
+        "stats": storage.multi_stats(),
+        "open": [_row(r) for r in storage.multi_open_trades()],
+        "closed": [_row(r) for r in storage.multi_closed(50)],
+    })
+
+
+@app.post("/api/admin/multi/control")
+async def multi_control(request: Request):
+    body = await request.json()
+    action = body.get("action")
+    if action not in ("start", "stop"):
+        return JSONResponse({"ok": False, "error": "action: start|stop"}, status_code=400)
+    (config.DATA_DIR / "cmd_multi.json").write_text(
+        json.dumps({"action": action}), encoding="utf-8")
+    return JSONResponse({"ok": True, "queued": action})
+
+
 @app.get("/api/admin/scalp")
 def admin_scalp():
     from . import storage as st

@@ -107,6 +107,32 @@ SCALP_TRAIL_START = float(os.getenv("SCALP_TRAIL_START", "1.5"))   # $1.5 в п�
 SCALP_TRAIL_LOCK = float(os.getenv("SCALP_TRAIL_LOCK", "0.3"))     # SL → вход +$0.3 (безубыток)
 SCALP_TRAIL_STEP = float(os.getenv("SCALP_TRAIL_STEP", "1.0"))     # далее тянем каждые $1
 
+# --- Мульти-символьный бот (отдельный процесс: python -m backend.main_multi) ---
+# Инструменты отобраны по отношению ATR(M5)/спред на лоте 0.01 (замер 2026-08-25):
+#   XAUUSD 8% спреда от ATR · NAS100 12% · XAGUSD 21% — годны.
+#   Мажоры (EURUSD 76%, GBPUSD 65%, AUDUSD >100%) НЕ годны для M5 на мин. лоте.
+MULTI_MAGIC = 20260825
+# Отбор 2026-08-25 сканом всех инструментов: критерий — стоп ≤2.5% от $100
+# на мин. лоте И спред ≤30% от ATR(M5). Прошли: индексы NAS100/GER40/UK100,
+# нефть USOUSD/UKOUSD, BTCUSD. Золото/серебро отсеяны (стоп 4.8%/6.1% от $100),
+# мажоры — спред 65-100% от ATR, крипта кроме BTC — спред 180-750%.
+MULTI_SYMBOLS = os.getenv(
+    "MULTI_SYMBOLS", "NAS100.s,GER40.s,UK100.s,USOUSD.s,UKOUSD.s,BTCUSD").split(",")
+MULTI_LOT = float(os.getenv("MULTI_LOT", "0.01"))
+MULTI_MAX_OPEN_TOTAL = int(os.getenv("MULTI_MAX_OPEN_TOTAL", "3"))   # всего позиций
+MULTI_MAX_OPEN_PER_SYMBOL = 1
+MULTI_MAX_TRADES_DAY = int(os.getenv("MULTI_MAX_TRADES_DAY", "45"))  # суммарно по всем
+MULTI_COOLDOWN_SEC = int(os.getenv("MULTI_COOLDOWN_SEC", "180"))     # на символ
+MULTI_STATE_FILE = "state_multi.json"
+MULTI_DB_VERSION = "multi"      # метка в scalp_trades для раздельной статистики
+
+# Риск-фильтр под мини-баланс: тестируем на демо, но риск считаем как для $100.
+# Если стоимость стопа > MULTI_MAX_RISK_PCT от MULTI_TEST_BALANCE — символ пропускается.
+# Замер 2026-08-25 (лот 0.01): NAS100 SL≈$0.22 (0.2%) OK · XAUUSD $4.88 (4.9%) · XAGUSD $6.36 (6.4%).
+MULTI_TEST_BALANCE = float(os.getenv("MULTI_TEST_BALANCE", "100"))
+MULTI_MAX_RISK_PCT = float(os.getenv("MULTI_MAX_RISK_PCT", "2.5"))
+MULTI_ENFORCE_RISK = os.getenv("MULTI_ENFORCE_RISK", "1") == "1"
+
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")  # в .env
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # авто-привязка по первому /start

@@ -76,7 +76,8 @@ def init_db():
         tcols = {r["name"] for r in c.execute("PRAGMA table_info(scalp_trades)")}
         for col, ddl in (("adx", "REAL"), ("atr", "REAL"), ("h1_trend", "TEXT"),
                          ("hour_utc", "INTEGER"), ("spread", "REAL"),
-                         ("ema_gap", "REAL"), ("max_favor", "REAL"), ("version", "TEXT")):
+                         ("ema_gap", "REAL"), ("max_favor", "REAL"), ("version", "TEXT"),
+                         ("symbol", "TEXT")):
             if col not in tcols:
                 c.execute(f"ALTER TABLE scalp_trades ADD COLUMN {col} {ddl}")
 
@@ -180,16 +181,16 @@ def events_recent(limit: int = 30) -> list:
 
 def scalp_open(ticket: int, side: str, entry: float, sl: float, tp: float,
                ctx: dict | None = None):
-    """ctx — контекст входа для аналитики: adx, atr, h1_trend, spread, ema_gap, version."""
+    """ctx — контекст входа для аналитики: adx, atr, h1_trend, spread, ema_gap, version, symbol."""
     ctx = ctx or {}
     with get_conn() as c:
         c.execute(
             "INSERT OR IGNORE INTO scalp_trades "
             "(ticket, side, entry, sl, tp, open_time, adx, atr, h1_trend, hour_utc, "
-            " spread, ema_gap, version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " spread, ema_gap, version, symbol) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (ticket, side, entry, sl, tp, _now(), ctx.get("adx"), ctx.get("atr"),
              ctx.get("h1_trend"), ctx.get("hour_utc"), ctx.get("spread"),
-             ctx.get("ema_gap"), ctx.get("version", "v2")))
+             ctx.get("ema_gap"), ctx.get("version", "v2"), ctx.get("symbol")))
 
 
 def scalp_update_sl(ticket: int, sl: float, max_favor: float | None = None):
@@ -208,25 +209,78 @@ def scalp_close(ticket: int, exit_price: float, pnl: float, reason: str):
 
 
 def scalp_open_trades() -> list:
+    """Только одиночный скальпер (мульти-бот живёт под version='multi')."""
     with get_conn() as c:
-        return c.execute("SELECT * FROM scalp_trades WHERE status='open'").fetchall()
+        return c.execute("SELECT * FROM scalp_trades WHERE status='open' "
+                         "AND COALESCE(version,'') <> 'multi'").fetchall()
 
 
 def scalp_closed(limit: int = 100) -> list:
     with get_conn() as c:
         return c.execute("SELECT * FROM scalp_trades WHERE status='closed' "
+                         "AND COALESCE(version,'') <> 'multi' "
                          "ORDER BY close_time DESC LIMIT ?", (limit,)).fetchall()
 
 
-def scalp_stats() -> dict:
+def multi_stats() -> dict:
+    """Статистика мульти-бота (version='multi'), с разбивкой по символам."""
     with get_conn() as c:
         r = c.execute("""SELECT COUNT(*) n, COALESCE(SUM(pnl),0) pnl,
                            SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) wins
-                           FROM scalp_trades WHERE status='closed'""").fetchone()
-        o = c.execute("SELECT COUNT(*) n FROM scalp_trades WHERE status='open'").fetchone()
+                         FROM scalp_trades WHERE status='closed' AND version='multi'""").fetchone()
+        o = c.execute("SELECT COUNT(*) n FROM scalp_trades "
+                      "WHERE status='open' AND version='multi'").fetchone()
         today = _now()[:10]
-        t = c.execute("SELECT COUNT(*) n FROM scalp_trades WHERE open_time LIKE ?",
-                      (today + "%",)).fetchone()
+        t = c.execute("SELECT COUNT(*) n FROM scalp_trades "
+                      "WHERE version='multi' AND open_time LIKE ?", (today + "%",)).fetchone()
+        per = c.execute("""SELECT symbol, COUNT(*) n, COALESCE(SUM(pnl),0) pnl,
+                             SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) wins
+                           FROM scalp_trades WHERE status='closed' AND version='multi'
+                           GROUP BY symbol ORDER BY pnl DESC""").fetchall()
+        n, wins = r["n"], r["wins"] or 0
+        return {
+            "closed_trades": n, "realized_pnl": round(r["pnl"], 2),
+            "open_trades": o["n"], "trades_today": t["n"],
+            "winrate": round(100 * wins / n, 1) if n else 0.0,
+            "per_symbol": [
+                {"symbol": p["symbol"], "trades": p["n"], "pnl": round(p["pnl"], 2),
+                 "winrate": round(100 * (p["wins"] or 0) / p["n"], 1) if p["n"] else 0.0}
+                for p in per],
+        }
+
+
+def multi_open_trades() -> list:
+    with get_conn() as c:
+        return c.execute("SELECT * FROM scalp_trades "
+                         "WHERE status='open' AND version='multi'").fetchall()
+
+
+def multi_closed(limit: int = 50) -> list:
+    with get_conn() as c:
+        return c.execute("SELECT * FROM scalp_trades WHERE status='closed' AND version='multi' "
+                         "ORDER BY close_time DESC LIMIT ?", (limit,)).fetchall()
+
+
+def multi_trades_today_symbol(symbol: str) -> int:
+    with get_conn() as c:
+        today = _now()[:10]
+        r = c.execute("SELECT COUNT(*) n FROM scalp_trades WHERE version='multi' "
+                      "AND symbol=? AND open_time LIKE ?", (symbol, today + "%")).fetchone()
+        return r["n"]
+
+
+def scalp_stats() -> dict:
+    """Статистика одиночного скальпера (без мульти-бота)."""
+    with get_conn() as c:
+        r = c.execute("""SELECT COUNT(*) n, COALESCE(SUM(pnl),0) pnl,
+                           SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) wins
+                           FROM scalp_trades WHERE status='closed'
+                           AND COALESCE(version,'') <> 'multi'""").fetchone()
+        o = c.execute("SELECT COUNT(*) n FROM scalp_trades WHERE status='open' "
+                      "AND COALESCE(version,'') <> 'multi'").fetchone()
+        today = _now()[:10]
+        t = c.execute("SELECT COUNT(*) n FROM scalp_trades WHERE open_time LIKE ? "
+                      "AND COALESCE(version,'') <> 'multi'", (today + "%",)).fetchone()
         n, wins = r["n"], r["wins"] or 0
         return {"closed_trades": n, "realized_pnl": round(r["pnl"], 2),
                 "open_trades": o["n"], "trades_today": t["n"],

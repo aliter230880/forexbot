@@ -57,6 +57,31 @@
   </div>
 </div>
 
+<div class="section" style="border-color:#388bfd"><h2>🌐 Мульти-символьный бот (тест для мини-баланса)</h2>
+  <div class="cards" style="margin-bottom:12px">
+    <div class="card"><div class="label">Статус</div><div class="value" id="mu-status" style="font-size:15px">—</div><div class="note" id="mu-note"></div></div>
+    <div class="card"><div class="label">Сделок сегодня</div><div class="value" id="mu-today">—</div><div class="note" id="mu-limit"></div></div>
+    <div class="card"><div class="label">Winrate</div><div class="value" id="mu-wr">—</div><div class="note" id="mu-closed"></div></div>
+    <div class="card"><div class="label">Реализовано</div><div class="value" id="mu-pnl">—</div><div class="note" id="mu-open"></div></div>
+    <div class="card"><div class="label">Риск-база</div><div class="value" id="mu-risk" style="font-size:15px">—</div><div class="note">стоп ≤ % от баланса</div></div>
+  </div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="danger" onclick="multiControl('stop')">🛑 Стоп мульти-бота</button>
+    <button class="ok" onclick="multiControl('start')">▶️ Запустить мульти-бота</button>
+    <span id="mu-msg" style="color:var(--muted);font-size:12px"></span>
+  </div>
+  <div id="mu-warn" style="font-size:12px;color:var(--gold);margin-bottom:10px"></div>
+  <h2 style="margin-top:14px">Результаты по инструментам</h2>
+  <table><thead><tr><th>Инструмент</th><th>Сделок</th><th>Winrate</th><th>PnL</th></tr></thead>
+    <tbody id="mu-per-symbol"></tbody></table>
+  <h2 style="margin-top:14px">Открытые позиции</h2>
+  <table><thead><tr><th>Открыта</th><th>Инстр.</th><th>Сторона</th><th>Вход</th><th>SL</th><th>TP</th></tr></thead>
+    <tbody id="mu-open-tbl"></tbody></table>
+  <h2 style="margin-top:14px">Последние закрытые</h2>
+  <table><thead><tr><th>Закрыта</th><th>Инстр.</th><th>Сторона</th><th>Вход</th><th>Выход</th><th>Причина</th><th>ADX</th><th>PnL</th></tr></thead>
+    <tbody id="mu-closed-tbl"></tbody></table>
+</div>
+
 <div class="section"><h2>⚡ Скальпинг — статистика (профиль SCALP)</h2>
   <div class="cards" style="margin-bottom:12px">
     <div class="card"><div class="label">Трансляция в канал</div><div class="value" id="sc-signals" style="font-size:15px">—</div><div class="note" id="sc-signals-note"></div></div>
@@ -108,12 +133,13 @@ const sign=x=>(x>=0?'+':'')+'$'+fmt(x);
 let chart=null;
 async function load(){
   try{
-    const [sum,eq,subs,ev,sc]=await Promise.all([
+    const [sum,eq,subs,ev,sc,mu]=await Promise.all([
       fetch('/api/summary').then(r=>r.json()),
       fetch('/api/equity?hours=24').then(r=>r.json()),
       fetch('/api/admin/subscribers').then(r=>r.json()),
       fetch('/api/events?limit=50').then(r=>r.json()),
       fetch('/api/admin/scalp').then(r=>r.json()).catch(()=>null),
+      fetch('/api/admin/multi').then(r=>r.json()).catch(()=>null),
     ]);
     const s=sum.snapshot||{}, st=sum.state;
     const el=document.getElementById('st-status');
@@ -162,6 +188,34 @@ async function load(){
       ).join('')||'<tr><td colspan="6" style="color:var(--muted)">пока пусто</td></tr>';
     }
 
+    if(mu){
+      const ms=mu.stats;
+      document.getElementById('mu-status').innerHTML=mu.halted
+        ?'<span class="pill p-red">ОСТАНОВЛЕН</span>':'<span class="pill p-green">Торгует</span>';
+      document.getElementById('mu-note').textContent=mu.halted?mu.halted_reason:mu.symbols.join(' · ');
+      document.getElementById('mu-today').textContent=ms.trades_today;
+      document.getElementById('mu-limit').textContent='лимит '+mu.max_trades_day+'/день · лот '+mu.lot;
+      document.getElementById('mu-wr').textContent=ms.winrate+'%';
+      document.getElementById('mu-closed').textContent=ms.closed_trades+' сделок закрыто';
+      document.getElementById('mu-pnl').textContent=sign(ms.realized_pnl);
+      document.getElementById('mu-pnl').className='value '+cls(ms.realized_pnl);
+      document.getElementById('mu-open').textContent=ms.open_trades+' открыто сейчас';
+      document.getElementById('mu-risk').textContent='$'+mu.test_balance+' / '+mu.max_risk_pct+'%';
+      const warns=[];
+      for(const [s,r] of Object.entries(mu.skipped_risk||{})) warns.push('⚠️ '+s+': '+r);
+      for(const [s,d] of Object.entries(mu.paused_symbols||{})) warns.push('⏸ '+s+': пауза после серии стопов ('+d+')');
+      document.getElementById('mu-warn').innerHTML=warns.join('<br>');
+      document.getElementById('mu-per-symbol').innerHTML=(ms.per_symbol||[]).map(p=>
+        `<tr><td>${p.symbol||'?'}</td><td>${p.trades}</td><td>${p.winrate}%</td><td class="${cls(p.pnl)}">${sign(p.pnl)}</td></tr>`
+      ).join('')||'<tr><td colspan="4" style="color:var(--muted)">пока нет закрытых сделок</td></tr>';
+      document.getElementById('mu-open-tbl').innerHTML=(mu.open||[]).map(r=>
+        `<tr><td>${r.open_time||''}</td><td>${r.symbol||''}</td><td>${r.side}</td><td>${r.entry}</td><td>${r.sl}</td><td>${r.tp}</td></tr>`
+      ).join('')||'<tr><td colspan="6" style="color:var(--muted)">нет открытых</td></tr>';
+      document.getElementById('mu-closed-tbl').innerHTML=(mu.closed||[]).map(r=>
+        `<tr><td>${r.close_time||''}</td><td>${r.symbol||''}</td><td>${r.side}</td><td>${r.entry}</td><td>${r.exit}</td><td>${(r.reason||'').toUpperCase()}</td><td>${r.adx!=null?Math.round(r.adx):'—'}</td><td class="${cls(r.pnl)}">${sign(r.pnl)}</td></tr>`
+      ).join('')||'<tr><td colspan="8" style="color:var(--muted)">пока пусто</td></tr>';
+    }
+
     document.getElementById('updated').textContent='обновлено '+new Date().toLocaleTimeString();
   }catch(e){document.getElementById('updated').textContent='ошибка: '+e;}
 }
@@ -175,6 +229,10 @@ async function broadcast(){
   const r=await fetch('/api/admin/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})});
   document.getElementById('bc-msg').textContent=r.ok?'поставлено в очередь':'ошибка';
   if(r.ok)document.getElementById('bc-text').value='';
+}
+async function multiControl(a){
+  const r=await fetch('/api/admin/multi/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:a})});
+  document.getElementById('mu-msg').textContent=r.ok?'команда отправлена, применится в течение 20 сек':'ошибка';
 }
 async function scalpSignals(on){
   const r=await fetch('/api/admin/bot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:on?'signals_on':'signals_off'})});
