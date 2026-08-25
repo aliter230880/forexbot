@@ -71,8 +71,11 @@ def summary():
         stats = {"realized_pnl": s["realized_pnl"], "total_costs": 0.0,
                  "closed_pairs": s["closed_trades"], "open_pairs": s["open_trades"],
                  "winrate": s["winrate"], "trades_today": s["trades_today"]}
-        grid = {"levels": config.SCALP_MAX_TRADES_DAY, "step_usd": config.SCALP_TP_USD,
-                "lot": config.SCALP_LOT, "tp_usd": config.SCALP_TP_USD}
+        # v2: SL/TP считаются от ATR, фиксированных TP_USD больше нет
+        grid = {"levels": config.SCALP_MAX_TRADES_DAY,
+                "step_usd": config.SCALP_ATR_MULT_SL,
+                "lot": config.SCALP_LOT,
+                "tp_usd": config.SCALP_ATR_MULT_TP}
     else:
         stats = storage.stats()
         grid = {"levels": config.GRID_LEVELS, "step_usd": config.GRID_STEP_USD,
