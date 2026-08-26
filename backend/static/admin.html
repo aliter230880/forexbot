@@ -57,6 +57,27 @@
   </div>
 </div>
 
+<div class="section" style="border-color:#8957e5"><h2>⚡ СКАЛЬПЕР V3 — ML-скальпер (стратегия №4, экспериментальный)</h2>
+  <div class="cards" style="margin-bottom:12px">
+    <div class="card"><div class="label">Статус</div><div class="value" id="ki-status" style="font-size:15px">—</div><div class="note" id="ki-note"></div></div>
+    <div class="card"><div class="label">Сделок сегодня</div><div class="value" id="ki-today">—</div><div class="note">лимит 12/день · стоп 6%</div></div>
+    <div class="card"><div class="label">Winrate</div><div class="value" id="ki-wr">—</div><div class="note" id="ki-closed"></div></div>
+    <div class="card"><div class="label">Реализовано</div><div class="value" id="ki-pnl">—</div><div class="note" id="ki-open"></div></div>
+    <div class="card"><div class="label">ML модель</div><div class="value" id="ki-ml" style="font-size:15px">—</div><div class="note">XGBoost acc 48.6%</div></div>
+  </div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="danger" onclick="kiroControl('stop')">🛑 Стоп V3</button>
+    <button class="ok" onclick="kiroControl('start')">▶️ Запустить V3</button>
+    <span id="ki-msg" style="color:var(--muted);font-size:12px"></span>
+  </div>
+  <h2 style="margin-top:14px">Открытые позиции</h2>
+  <table><thead><tr><th>Открыта</th><th>Сторона</th><th>Вход</th><th>SL</th><th>TP</th></tr></thead>
+    <tbody id="ki-open-tbl"></tbody></table>
+  <h2 style="margin-top:14px">Последние закрытые</h2>
+  <table><thead><tr><th>Закрыта</th><th>Сторона</th><th>Вход</th><th>Выход</th><th>Причина</th><th>PnL</th></tr></thead>
+    <tbody id="ki-closed-tbl"></tbody></table>
+</div>
+
 <div class="section" style="border-color:#2ea043"><h2>🔀 ГИБРИД — лимитки сетки + жёсткий SL (стратегия №3)</h2>
   <div class="cards" style="margin-bottom:12px">
     <div class="card"><div class="label">Статус</div><div class="value" id="hy-status" style="font-size:15px">—</div><div class="note" id="hy-note"></div></div>
@@ -159,7 +180,7 @@ const sign=x=>(x>=0?'+':'')+'$'+fmt(x);
 let chart=null;
 async function load(){
   try{
-    const [sum,eq,subs,ev,sc,mu,hy]=await Promise.all([
+    const [sum,eq,subs,ev,sc,mu,hy,ki]=await Promise.all([
       fetch('/api/summary').then(r=>r.json()),
       fetch('/api/equity?hours=24').then(r=>r.json()),
       fetch('/api/admin/subscribers').then(r=>r.json()),
@@ -167,6 +188,7 @@ async function load(){
       fetch('/api/admin/scalp').then(r=>r.json()).catch(()=>null),
       fetch('/api/admin/multi').then(r=>r.json()).catch(()=>null),
       fetch('/api/admin/hybrid').then(r=>r.json()).catch(()=>null),
+      fetch('/api/admin/kiro').then(r=>r.json()).catch(()=>null),
     ]);
     const s=sum.snapshot||{}, st=sum.state;
     const el=document.getElementById('st-status');
@@ -274,6 +296,26 @@ async function load(){
       ).join('')||'<tr><td colspan="7" style="color:var(--muted)">пока пусто</td></tr>';
     }
 
+    if(ki){
+      document.getElementById('ki-status').innerHTML=ki.halted
+        ?'<span class="pill p-red">ОСТАНОВЛЕН</span>':'<span class="pill p-green">Торгует</span>';
+      document.getElementById('ki-note').textContent=ki.halted?ki.halted_reason:ki.symbol+' · лот '+ki.lot+' · база $'+ki.test_balance;
+      document.getElementById('ki-today').textContent=ki.stats.trades_today;
+      document.getElementById('ki-wr').textContent=ki.stats.winrate+'%';
+      document.getElementById('ki-closed').textContent=ki.stats.closed_trades+' сделок закрыто';
+      document.getElementById('ki-pnl').textContent=sign(ki.stats.realized_pnl);
+      document.getElementById('ki-pnl').className='value '+cls(ki.stats.realized_pnl);
+      document.getElementById('ki-open').textContent=ki.stats.open_trades+' открыто сейчас';
+      document.getElementById('ki-ml').innerHTML=ki.ml_trained
+        ?'<span class="pill p-green">обучена</span>':'<span class="pill p-red">нет</span>';
+      document.getElementById('ki-open-tbl').innerHTML=(ki.open||[]).map(r=>
+        `<tr><td>${r.open_time||''}</td><td>${r.side}</td><td>${r.entry}</td><td>${r.sl}</td><td>${r.tp}</td></tr>`
+      ).join('')||'<tr><td colspan="5" style="color:var(--muted)">нет открытых</td></tr>';
+      document.getElementById('ki-closed-tbl').innerHTML=(ki.closed||[]).map(r=>
+        `<tr><td>${r.close_time||''}</td><td>${r.side}</td><td>${r.entry}</td><td>${r.exit}</td><td>${(r.reason||'').toUpperCase()}</td><td class="${cls(r.pnl)}">${sign(r.pnl)}</td></tr>`
+      ).join('')||'<tr><td colspan="6" style="color:var(--muted)">пока пусто</td></tr>';
+    }
+
     document.getElementById('updated').textContent='обновлено '+new Date().toLocaleTimeString();
   }catch(e){document.getElementById('updated').textContent='ошибка: '+e;}
 }
@@ -291,6 +333,10 @@ async function broadcast(){
 async function hybridControl(a){
   const r=await fetch('/api/admin/hybrid/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:a})});
   document.getElementById('hy-msg').textContent=r.ok?'команда отправлена, применится в течение 20 сек':'ошибка';
+}
+async function kiroControl(a){
+  const r=await fetch('/api/admin/kiro/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:a})});
+  document.getElementById('ki-msg').textContent=r.ok?'команда отправлена, применится в течение 30 сек':'ошибка';
 }
 async function multiControl(a){
   const r=await fetch('/api/admin/multi/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:a})});

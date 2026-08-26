@@ -19,6 +19,7 @@ Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyC
   Where-Object {
     $_.CommandLine -like "*backend.main *" -or
     $_.CommandLine -like "*backend.main_multi*" -or
+    $_.CommandLine -like "*backend.main_scalp3*" -or
     $_.CommandLine -like "*backend.main_hybrid*" -or
     $_.CommandLine -like "*backend.webapp*"
   } |
@@ -32,6 +33,8 @@ Start-Process -FilePath $py -ArgumentList "-m","backend.main_multi","run" -Worki
 Write-Host "        + multi bot (6 instruments)" -ForegroundColor DarkGray
 Start-Process -FilePath $py -ArgumentList "-m","backend.main_hybrid","run" -WorkingDirectory $dir -WindowStyle Hidden
 Write-Host "        + hybrid (grid limits + hard SL)" -ForegroundColor DarkGray
+Start-Process -FilePath $py -ArgumentList "-m","backend.main_scalp3","run" -WorkingDirectory $dir -WindowStyle Hidden
+Write-Host "        + scalper v3 (ML, experimental)" -ForegroundColor DarkGray
 Start-Process -FilePath $py -ArgumentList "-m","backend.webapp" -WorkingDirectory $dir -WindowStyle Hidden
 Write-Host "        + web panel :8181" -ForegroundColor DarkGray
 

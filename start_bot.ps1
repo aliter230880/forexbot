@@ -7,6 +7,7 @@ Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
   Where-Object {
     $_.CommandLine -like "*backend.main *" -or
     $_.CommandLine -like "*backend.main_multi*" -or
+    $_.CommandLine -like "*backend.main_scalp3*" -or
     $_.CommandLine -like "*backend.main_hybrid*" -or
     $_.CommandLine -like "*backend.webapp*"
   } |
@@ -28,6 +29,11 @@ Write-Output "multi bot started (detached)"
 Start-Process -FilePath $py -ArgumentList "-m", "backend.main_hybrid", "run" `
   -WorkingDirectory $dir -WindowStyle Hidden
 Write-Output "hybrid bot started (detached)"
+
+# скальпер V3 (ML, стратегия №4, без трансляций)
+Start-Process -FilePath $py -ArgumentList "-m", "backend.main_scalp3", "run" `
+  -WorkingDirectory $dir -WindowStyle Hidden
+Write-Output "scalper v3 started (detached)"
 
 # дашборд + админка
 Start-Process -FilePath $py -ArgumentList "-m", "backend.webapp" `

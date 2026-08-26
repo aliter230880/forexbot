@@ -163,6 +163,42 @@ async def bot_control(request: Request):
     return JSONResponse({"ok": True, "queued": action})
 
 
+@app.get("/api/admin/kiro")
+def admin_kiro():
+    """kiro-бот (стратегия №4, ML-скальпер): статистика и статус."""
+    import json as _json
+    try:
+        state = _json.loads(
+            (config.DATA_DIR / "state_kiro.json").read_text(encoding="utf-8"))
+    except (FileNotFoundError, _json.JSONDecodeError):
+        state = {}
+    s = storage.kiro_stats()
+    return JSONResponse({
+        "symbol": "XAUUSD.s",
+        "lot": 0.01,
+        "test_balance": 100.0,
+        "max_trades_day": 12,
+        "daily_loss_pct": 6.0,
+        "halted": state.get("halted", False),
+        "halted_reason": state.get("halted_reason", ""),
+        "ml_trained": (config.BASE_DIR / "kiro" / "models" / "xgboost_model.json").exists(),
+        "stats": s,
+        "open": [_row(r) for r in storage.kiro_open_trades()],
+        "closed": [_row(r) for r in storage.kiro_closed(50)],
+    })
+
+
+@app.post("/api/admin/kiro/control")
+async def kiro_control(request: Request):
+    body = await request.json()
+    action = body.get("action")
+    if action not in ("start", "stop"):
+        return JSONResponse({"ok": False, "error": "action: start|stop"}, status_code=400)
+    (config.DATA_DIR / "cmd_kiro.json").write_text(
+        json.dumps({"action": action}), encoding="utf-8")
+    return JSONResponse({"ok": True, "queued": action})
+
+
 @app.get("/api/admin/hybrid")
 def admin_hybrid():
     """Прогресс гибрида (стратегия №3): лимитки + жёсткий SL."""

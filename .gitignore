@@ -9,3 +9,9 @@ backup/
 login.ini
 fx.mp4
 i.webp
+AliTerraShooterServer_READY/
+forex-scalper-bot/
+kiro/.env
+kiro/data/
+kiro/models/*.json
+kiro/logs/
