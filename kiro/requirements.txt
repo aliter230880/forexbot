@@ -1,0 +1,46 @@
+﻿# Core Trading
+MetaTrader5==5.0.45
+pandas==2.1.4
+numpy==1.26.2
+
+# Machine Learning
+xgboost==2.0.3
+scikit-learn==1.3.2
+joblib==1.3.2
+
+# Sentiment Analysis (предобученные модели)
+transformers==4.36.0
+torch==2.1.2
+sentencepiece==0.1.99
+
+# Technical Analysis
+ta-lib==0.4.28
+pandas-ta==0.3.14b0
+
+# Web Scraping (для парсинга liquidity maps)
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# Data & APIs
+requests==2.31.0
+yfinance==0.2.33
+python-dotenv==1.0.0
+
+# Database
+sqlalchemy==2.0.23
+sqlite3-python==1.0.0
+
+# Monitoring & Alerts
+python-telegram-bot==20.7
+loguru==0.7.2
+
+# Async & Performance
+aiohttp==3.9.1
+asyncio==3.4.3
+
+# Utils
+python-dateutil==2.8.2
+pytz==2023.3
+schedule==1.2.0
+
+feedparser>=6.0.10  # RSS parsing для news headlines

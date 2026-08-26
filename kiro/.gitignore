@@ -1,0 +1,49 @@
+# Environment
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Data & Logs
+logs/
+*.log
+data/*.csv
+data/*.json
+!data/.gitkeep
+
+# Models
+models/*.json
+models/*.pkl
+models/*.joblib
+!models/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary
+temp/
+tmp/
+*.tmp
