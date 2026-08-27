@@ -16,7 +16,8 @@ from . import storage
 
 BOTS = [
     ("Гибрид (лимитки+SL)", "hybrid"),
-    ("Скальпер V2 (EMA+ADX)", ""),
+    ("Скальпер V1+V2 (как в админке)", ""),
+    ("Скальпер V2 чистый (без v1)", "v2"),
     ("Мульти-бот (6 инстр.)", "multi"),
     ("Скальпер V3 (ML+фигуры)", "kiro"),
     ("Сетка (grid)", "grid"),
@@ -36,8 +37,8 @@ def day_stats(version: str) -> dict:
              "WHERE status='closed'")
         rows = _fetch(q)
     else:
-        cond = "(version='' OR version IS NULL)" if version == "" \
-            else f"version='{version}'"
+        cond = ("(version='' OR version IS NULL OR version='v2')" if version == ""
+                else f"version='{version}'")
         q = (f"SELECT substr(close_time,1,10) d, pnl FROM scalp_trades "
              f"WHERE status='closed' AND {cond}")
         rows = _fetch(q)
@@ -67,35 +68,40 @@ def style_header(ws, row, ncols):
 def build(path: Path):
     storage.init_db()
     wb = Workbook()
+    stats = {ver: day_stats(ver) for _, ver in BOTS}
+    last_day = max((d for ds in stats.values() for d in ds), default="")
 
     # ---------- Лист 1: сводка по ботам ----------
     ws = wb.active
     ws.title = "Сводка"
     ws.append(["Бот", "Сделок всего", "Winrate %", "PnL всего $", "Дней в работе",
-               "Сделок/день", "PnL/день $"])
-    style_header(ws, 1, 7)
+               "Сделок/день", "PnL/день $", f"PnL {last_day} $"])
+    style_header(ws, 1, 8)
     row = 2
     for name, ver in BOTS:
-        ds = day_stats(ver)
+        ds = stats[ver]
         trades = sum(d["trades"] for d in ds.values())
         wins = sum(d["wins"] for d in ds.values())
         pnl = sum(d["pnl"] for d in ds.values())
         days = len(ds)
+        today = ds.get(last_day, {}).get("pnl", 0.0)
         ws.append([name, trades,
                    round(100 * wins / trades, 1) if trades else 0,
                    round(pnl, 2),
                    days,
                    round(trades / days, 1) if days else 0,
-                   round(pnl / days, 2) if days else 0])
-        pnl_cell = ws.cell(row=row, column=4)
-        pnl_cell.fill = WIN_FILL if pnl >= 0 else LOSS_FILL
+                   round(pnl / days, 2) if days else 0,
+                   round(today, 2)])
+        for cc, val in ((4, pnl), (8, today)):
+            cell = ws.cell(row=row, column=cc)
+            cell.fill = WIN_FILL if val >= 0 else LOSS_FILL
         row += 1
-    for col, w in zip("ABCDEFG", [26, 13, 11, 12, 13, 12, 12]):
+    for col, w in zip("ABCDEFGH", [26, 13, 11, 12, 13, 12, 12, 15]):
         ws.column_dimensions[col].width = w
 
     # ---------- Лист 2: по дням ----------
     ws2 = wb.create_sheet("По дням")
-    all_days = sorted({d for _, ver in BOTS for d in day_stats(ver)})
+    all_days = sorted({d for ds in stats.values() for d in ds})
     ws2.append(["Дата"] + [n for n, _ in BOTS] + ["Итого за день $"])
     style_header(ws2, 1, 2 + len(BOTS))
     grand = defaultdict(float)
@@ -103,7 +109,7 @@ def build(path: Path):
         ws2.cell(row=r, column=1, value=day)
         total_day = 0.0
         for ci, (name, ver) in enumerate(BOTS, start=2):
-            d = day_stats(ver).get(day)
+            d = stats[ver].get(day)
             if d:
                 ws2.cell(row=r, column=ci,
                          value=f"{d['trades']} сд / WR "
@@ -135,12 +141,14 @@ def build(path: Path):
     style_header(ws3, 1, 9)
     r = 2
     for name, ver in BOTS:
+        if ver == "v2":
+            continue  # подмножество строки V1+V2 — иначе дубликаты сделок
         if ver == "grid":
             q = ("SELECT 'XAUUSD.s', 'LONG', buy_price, sell_price, open_time, "
                  "close_time, 'tp', pnl FROM pairs WHERE status='closed'")
         else:
-            cond = "(version='' OR version IS NULL)" if ver == "" \
-                else f"version='{ver}'"
+            cond = ("(version='' OR version IS NULL OR version='v2')" if ver == ""
+                    else f"version='{ver}'")
             q = (f"SELECT symbol, side, entry, exit, open_time, close_time, "
                  f"reason, pnl FROM scalp_trades WHERE status='closed' AND {cond}")
         with storage.get_conn() as c:
