@@ -72,7 +72,27 @@ def init_db():
                 status TEXT DEFAULT 'open'
             )
         """)
-        # аналитика входов: контекст рынка на момент сделки
+        # копитрейдинг: маппинг сделка_мастера → сделка_копии
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS copy_trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                master_ticket INTEGER,
+                master_version TEXT,
+                symbol TEXT,
+                side TEXT,
+                master_entry REAL,
+                copy_ticket INTEGER,
+                copy_entry REAL,
+                copy_lot REAL,
+                master_sl REAL, master_tp REAL,
+                open_time TEXT,
+                close_time TEXT,
+                master_pnl REAL,
+                copy_pnl REAL,
+                status TEXT DEFAULT 'open'    -- open | closed | failed | skipped
+            )
+        """)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_copy_master ON copy_trades(master_ticket)")
         tcols = {r["name"] for r in c.execute("PRAGMA table_info(scalp_trades)")}
         for col, ddl in (("adx", "REAL"), ("atr", "REAL"), ("h1_trend", "TEXT"),
                          ("hour_utc", "INTEGER"), ("spread", "REAL"),

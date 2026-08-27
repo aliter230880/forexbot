@@ -166,6 +166,30 @@ HYBRID_WEEKEND_CLOSE_HOUR = 22   # пятница: флэт
 HYBRID_STATE_FILE = "state_hybrid.json"
 HYBRID_DB_VERSION = "hybrid"
 
+# --- КОПИТРЕЙДИНГ (copier_engine.py + main_copier.py) ---
+# Копир — отдельный процесс на втором терминале MT5 (счёт подписчика).
+# Читает сделки выбранных мастеров из общей bot.db и зеркалит:
+#   лот = баланс_подписчика / баланс_мастера × лот_мастера (приводится к шагу лота)
+#   вход — рыночный по появлению сделки мастера; SL/TP пересчитываются от цены входа мастера
+#   закрытие — когда мастер закрыл (tp/sl/manual), копир закрывает зеркалку по рынку
+# По умолчанию DRY_RUN=1: только логи, ордера не отправляются.
+COPIER_DRY_RUN = os.getenv("COPIER_DRY_RUN", "1") == "1"
+COPIER_MASTERS = os.getenv("COPIER_MASTERS", "hybrid,kiro").split(",")  # версии мастеров
+# второй терминал MT5 (счёт подписчика); пока = мастер-терминал для теста логики
+COPIER_MT5_PATH = os.getenv("COPIER_MT5_PATH", r"E:\AI\MetaTrader5\terminal64.exe")
+COPIER_LOGIN = int(os.getenv("COPIER_LOGIN", "0"))        # 0 = текущий счёт терминала
+COPIER_PASSWORD = os.getenv("COPIER_PASSWORD", "")
+COPIER_SERVER = os.getenv("COPIER_SERVER", "")
+COPIER_MAGIC = 20260828
+# баланс мастера для масштабирования лота (если 0 — берётся из БД/конфига)
+COPIER_MASTER_BALANCE = float(os.getenv("COPIER_MASTER_BALANCE", "100000"))
+COPIER_FIXED_LOT = float(os.getenv("COPIER_FIXED_LOT", "0"))  # >0 = фикс. лот без масштабирования
+COPIER_MAX_LOT = float(os.getenv("COPIER_MAX_LOT", "0.1"))
+COPIER_MAX_POS = int(os.getenv("COPIER_MAX_POS", "6"))     # макс. зеркальных позиций
+COPIER_MAX_LATENCY_SEC = int(os.getenv("COPIER_MAX_LATENCY_SEC", "300"))  # копируем сделки не старше
+COPIER_POLL_SEC = int(os.getenv("COPIER_POLL_SEC", "5"))
+COPIER_STATE_FILE = "state_copier.json"
+
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")  # в .env
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # авто-привязка по первому /start
