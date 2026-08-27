@@ -83,7 +83,7 @@ def sync_closed():
                  t["side"], reason, d.price, pnl, s["winrate"], s["realized_pnl"])
 
 
-def open_trade(side: str, confidence: float) -> int | None:
+def open_trade(side: str, confidence: float, source: str = "ml") -> int | None:
     info = mt5.symbol_info(SYMBOL)
     tick = mt5.symbol_info_tick(SYMBOL)
     if not info or not tick or tick.ask <= 0:
@@ -98,6 +98,12 @@ def open_trade(side: str, confidence: float) -> int | None:
     if sl_dist * pv > TEST_BALANCE * 0.04:
         sl_dist = TEST_BALANCE * 0.04 / pv
         tp_dist = sl_dist * 1.4
+    # минимальная дистанция брокера (учебный фикс из мульти-бота: 10016)
+    spread = tick.ask - tick.bid
+    min_dist = info.trade_stops_level * info.point + spread * 1.5
+    if min_dist > 0 and sl_dist < min_dist:
+        sl_dist = min_dist
+        tp_dist = sl_dist * 1.4
     digits = info.digits
     sl = round(entry - sl_dist if is_long else entry + sl_dist, digits)
     tp = round(entry + tp_dist if is_long else entry - tp_dist, digits)
@@ -105,7 +111,7 @@ def open_trade(side: str, confidence: float) -> int | None:
         "action": mt5.TRADE_ACTION_DEAL, "symbol": SYMBOL,
         "volume": LOT, "type": mt5.ORDER_TYPE_BUY if is_long else mt5.ORDER_TYPE_SELL,
         "price": entry, "sl": sl, "tp": tp, "deviation": 30,
-        "magic": KIRO_MAGIC, "comment": "kiro_ml",
+        "magic": KIRO_MAGIC, "comment": ("v3_" + source)[:30],
         "type_time": mt5.ORDER_TIME_GTC,
     }
     for filling in (mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_RETURN):
@@ -117,10 +123,10 @@ def open_trade(side: str, confidence: float) -> int | None:
                                    "hour_utc": datetime.now(timezone.utc).hour,
                                    "version": VERSION, "symbol": SYMBOL,
                                    "adx": round(confidence * 100, 1),
-                                   "h1_trend": f"conf={confidence:.2f}",
+                                   "h1_trend": f"{source} conf={confidence:.2f}",
                                })
-            log.info("KIRO %s @ %.*f conf %.2f sl %.2f tp %.2f",
-                     side, digits, res.price, confidence, sl, tp)
+            log.info("KIRO %s [%s] @ %.*f conf %.2f sl %.2f tp %.2f",
+                     side, source, digits, res.price, confidence, sl, tp)
             return res.order
         if res and res.retcode != mt5.TRADE_RETCODE_INVALID_FILL:
             log.error("kiro order failed: %s %s", res.retcode, res.comment)
@@ -201,11 +207,34 @@ def main():
                     decision = strategy.analyze_and_decide()
                     action = decision.get("action")
                     conf = float(decision.get("confidence") or 0)
-                    if action in ("buy", "sell") and conf >= 0.6:
-                        t = open_trade(action, conf)
+                    # логика реального трейдера (ликвидность+фигуры+канал+дивергенция,
+                    # фильтр азиатского тренда): подтверждение или самостоятельный вход
+                    try:
+                        from backend import trader_logic
+                        tl = trader_logic.trader_signal()
+                        st["last_trader_signal"] = {
+                            "action": tl.get("action"),
+                            "votes": tl.get("votes"),
+                            "asian_trend": tl.get("asian_trend"),
+                        }
+                    except Exception as e:  # noqa: BLE001
+                        log.debug("trader_logic error: %s", e)
+                        tl = {"action": None}
+                    tl_dir = tl.get("action")
+                    tl_votes = len(tl.get("votes") or {})
+                    # вход A: ML + подтверждение логики трейдера
+                    # вход B: логика трейдера сама (>=2 голосов), даже если ML молчит
+                    if action in ("buy", "sell") and conf >= 0.6 and tl_dir:
+                        want = "buy" if tl_dir == "LONG" else "sell"
+                        if want == action:
+                            t = open_trade(action, conf, source=f"ml+trader({tl_votes})")
+                            if t:
+                                st["last_trade"] = time.time(); save_state(st)
+                    elif tl_dir and tl_votes >= 2:
+                        t = open_trade("buy" if tl_dir == "LONG" else "sell",
+                                       float(tl_votes) / 4.0, source=f"trader({tl_votes})")
                         if t:
-                            st["last_trade"] = time.time()
-                            save_state(st)
+                            st["last_trade"] = time.time(); save_state(st)
             elif s["trades_today"] >= MAX_TRADES_DAY:
                 log.debug("лимит дня")
             time.sleep(POLL_SECONDS)
