@@ -1,7 +1,67 @@
-# Forex Bot — CONTEXT v2.4
-**Дата обновления:** 2026-08-28 (вечер)
+# Forex Bot — CONTEXT v2.5
+**Дата обновления:** 2026-08-28 (ночь)
 
-## 🔴 СЕССИЯ 28.08 ВЕЧЕР — ПЕРЕУСТАНОВКА VPS И ПОВТОРНЫЙ ДЕПЛОЙ (читать первым!)
+## ✅ СЕССИЯ 28.08 НОЧЬ — TELEGRAM ЧЕРЕЗ РЕЛЕЙ ЗАРАБОТАЛ (читать первым!)
+
+**Итог: блокер Telegram закрыт.** На новом VPS Telegram TCP-блокировался целиком
+(даже connect не проходил, IP-пиннинг бесполезен). Решение — **релей через
+крипто-VPS** — заведено и проверено end-to-end.
+
+### Как устроен релей (РАБОТАЕТ)
+- На крипто-VPS `168.222.143.103` (**trade.aliterra.space**, Caddy) добавлен маршрут
+  внутри существующего блока `trade.aliterra.space { ... }`:
+  ```
+  handle /tgrelay-fx99/* {
+      uri strip_prefix /tgrelay-fx99
+      reverse_proxy 149.154.167.220:443 {
+          header_up Host api.telegram.org
+          transport http { tls; tls_insecure_skip_verify }
+      }
+  }
+  ```
+  Порядок: специфичный `/tgrelay-fx99/*` идёт **перед** `handle /api/*` и catch-all
+  корнем grid-bot'а — соседи не задеты. `caddy validate` = Valid. Бэкап:
+  `/etc/caddy/Caddyfile.bak.1787944991` (перед правкой, 22:23). **Diff подтвердил:
+  добавлен только блок релея, больше ничего не тронуто.**
+- ⚠️ Caddy крипто-VPS обслуживает НЕ web3/character/piper (устаревший handoff), а
+  РЕАЛЬНО: **ai.aliterra.space, trade.aliterra.space, promo.aliterra.space,
+  unidev.space(+www), parser.unidev.space** — все целы после правки.
+
+### Код forexbot (закоммичено b66e17f, в main)
+- `config.py`: `TELEGRAM_API_BASE = os.getenv("TELEGRAM_API_BASE", "https://api.telegram.org")`
+- `notifier.py`: и `_api()`, и `send_photo()` строят URL от `config.TELEGRAM_API_BASE`
+  (а не хардкод api.telegram.org). IP-пиннинг `_pin_telegram_dns()` остался, но не нужен.
+
+### .env на боевом VPS (185.46.10.179, применено)
+- Добавлено: `TELEGRAM_API_BASE=https://trade.aliterra.space/tgrelay-fx99`
+- Закомментировано: `#TELEGRAM_API_IPS=...` (пиннинг больше не путь; релей основной)
+- Код на VPS обновлён БЕЗ GitHub-токена: 2 файла переданы base64-командой через
+  RDP-буфер (обход кириллицы Server 2016 + без светящихся секретов). `fxbot-telegram`
+  перезапущен.
+
+### Проверки (все ✅)
+- `getMe` через релей → `{"ok":true,...username:"Dim_forex_bot"}`
+- `getWebhookInfo` → `pending_update_count: 0` (было 4 — бот вычитал очередь, значит
+  **409 Conflict исчез**, второго поллера нет после переустановки VPS)
+- `sendMessage` владельцу (789368186) → HTTP 200, message_id 324 — доставлено
+
+### Процессы на VPS вычищены (23:32)
+Был дубль `backend.main run` (старт 22:02 и 23:13) → риск двойного getUpdates/409.
+**Старый (22:02, PID 6600+1196) убит, оставлен свежий (23:13, PID 3728+2896).**
+На VPS сейчас по одному: **hybrid (торгует, +$52.84 WR 84%), main (TG-команды), webapp.**
+Примечание: каждый бот = пара python (venv-лаунчер порождает `Program Files\Python312`
+как дочерний) — это НЕ дубль, а норма venv.
+
+### 🔴 Осталась ТОЛЬКО безопасность (secrets светились в чате/на VPS)
+1. **Перевыпустить токен бота** @Dim_forex_bot у @BotFather → обновить
+   `TELEGRAM_BOT_TOKEN` в `.env` VPS → рестарт `fxbot-telegram`
+2. Перевыпустить GitHub-токен `ghp_...`
+3. Удалить GitHub release `vps-data` (id 378694659) — bot.db + скрипты с секретами
+4. Сменить пароли Administrator VPS и root крипто-VPS
+
+---
+
+## 🔴 СЕССИЯ 28.08 ВЕЧЕР — ПЕРЕУСТАНОВКА VPS И ПОВТОРНЫЙ ДЕПЛОЙ
 
 **Главное открытие: VPS 185.46.10.179 был ПЕРЕУСТАНОВЛЕН REG.RU ~28.08 10:09** —
 чистая ОС (Cloudbase/openstack-образ), весь вчерашний деплой стёрт. Вероятно при
@@ -23,26 +83,16 @@
 ломает кириллицу в .ps1!) + `_server/vps_fix1.ps1`. Передача на VPS: GitHub release
 asset + Invoke-WebRequest с токеном (проброс диска \\tsclient не работал).
 
-### 🔴 ОСТАВШИЙСЯ БЛОКЕР: Telegram — TCP-блокировка ВСЕХ IP
-На новом VPS **все IP Telegram (149.154.x.x, 91.108.x.x) блокируются на уровне TCP**
-(даже connect не проходит) — жёстче, чем раньше: DNS-пиннинг бесполезен.
-`/status` боту не отвечает; в hybrid.log `send_to failed: timed out`.
+### ✅ БЛОКЕР TELEGRAM ЗАКРЫТ (см. раздел «СЕССИЯ 28.08 НОЧЬ» вверху)
+Была TCP-блокировка всех IP Telegram на новом VPS (жёстче пиннинга). Решено релеем
+через крипто-VPS: `.env` VPS → `TELEGRAM_API_BASE=https://trade.aliterra.space/tgrelay-fx99`,
+код читает базовый URL из config. getMe/sendMessage → 200, 409 исчез. Работает.
 
-**Решение в работе: релей через крипто-VPS** (168.222.143.103, trade.aliterra.space,
-SSH root, plink с ПК юзера работает). С крипто-VPS Telegram доступен (149.154.167.220 → 302).
-В Caddy крипто-VPS добавлен маршрут **`/tgrelay-fx99/*`** → https://149.154.167.220
-(Host/SNI api.telegram.org), конфиг валиден, перезагружен. Тест с ПК давал 502 —
-вероятно https-транспорт Caddy к IP требует доработки (tls_server_name задан;
-проверить `trade.aliterra.space/tgrelay-fx99/bot<токен>/getMe`).
-**Дальше:** добить релей → в notifier.py добавить TELEGRAM_API_BASE (базовый URL
-вместо api.telegram.org) → в .env VPS: `TELEGRAM_API_BASE=https://trade.aliterra.space/tgrelay-fx99`
-→ перезапуск fxbot-telegram. Бэкап Caddyfile на крипто-VPS: /etc/caddy/Caddyfile.bak.*
-
-### ⚠️ Безопасность — сделать сразу после починки Telegram
+### ⚠️ Безопасность — сделать (secrets светились)
 1. **Перевыпустить GitHub-токен ghp_42HU...** (светился в чате и на VPS)
 2. **Удалить release `vps-data`** (id 378694659) — там bot.db и скрипты с секретами
 3. Сменить пароль Administrator VPS и root крипто-VPS (светились в переписке)
-4. Telegram-токен бота тоже светился — перевыпустить у @BotFather (и обновить .env)
+4. **Telegram-токен бота светился многократно** — перевыпустить у @BotFather и обновить .env VPS
 
 ### Прочее
 - AAAA-запись fxbot.space удалена юзером (была парковка REG.RU — IPv6 уводил мимо)
@@ -294,7 +344,7 @@ Fear&Greed с alternative.me, VIX/DXY через yfinance, экономкале�
 
 ---
 
-## 🖥️ Миграция на VPS заказчика (2026-08-28) — СТАТУС: 95%, 2 блокера (порты REG.RU, Telegram 409)
+## 🖥️ Миграция на VPS заказчика (2026-08-28) — СТАТУС: ✅ 100% рабочее (порты открыты, Telegram через релей, гибрид торгует). Осталась только смена secrets.
 
 **VPS:** REG.RU `185.46.10.179`, Windows Server 2016 (build 14393), вход Administrator.
 Домен **fxbot.space** (REG.RU). Открытые порты: только RDP 3389 (SSH/WinRM закрыты —
