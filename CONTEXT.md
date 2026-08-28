@@ -1,5 +1,55 @@
-# Forex Bot — CONTEXT v2.3
-**Дата обновления:** 2026-08-28
+# Forex Bot — CONTEXT v2.4
+**Дата обновления:** 2026-08-28 (вечер)
+
+## 🔴 СЕССИЯ 28.08 ВЕЧЕР — ПЕРЕУСТАНОВКА VPS И ПОВТОРНЫЙ ДЕПЛОЙ (читать первым!)
+
+**Главное открытие: VPS 185.46.10.179 был ПЕРЕУСТАНОВЛЕН REG.RU ~28.08 10:09** —
+чистая ОС (Cloudbase/openstack-образ), весь вчерашний деплой стёрт. Вероятно при
+обработке тикета про порты. Поэтому порты «открылись», а всё остальное пропало.
+
+### Развёрнуто заново (28.08 22:00, всё работает)
+| Что | Статус |
+|---|---|
+| Python 3.12.10 + venv `C:\forexbot\.venv` | ✅ пакеты стоят, импорты ОК |
+| Проект `C:\forexbot` | ✅ zipball с GitHub (ветка **main**, не master!) |
+| Данные bot.db/state*.json/telegram.json | ✅ перенесены (GitHub release `vps-data`) |
+| MT5 → **`C:\MetaTrader5`** (⚠️ путь изменился, задан в .env: MT5_TERMINAL_PATH) | ✅ подключён, 700158875, конфиг счёта подхвачен (папка данных BF9336D0...) |
+| Firewall 80/443/8181 | ✅ |
+| Caddy v2.11.4 `C:\caddy` | ✅ **https://fxbot.space и admin.fxbot.space РАБОТАЮТ (200, LE-серт)** |
+| Автозапуск | ✅ 5 задач: fxbot-terminal/hybrid/web/telegram/caddy (SYSTEM, кроме терминала) |
+| Гибрид | ✅ торгует: закрыл GER40 +$0.29, WR 84%, итого +$52.60 |
+
+Деплой-скрипты: `_server/vps_setup_ascii.ps1` (полный, ASCII-only — Server 2016
+ломает кириллицу в .ps1!) + `_server/vps_fix1.ps1`. Передача на VPS: GitHub release
+asset + Invoke-WebRequest с токеном (проброс диска \\tsclient не работал).
+
+### 🔴 ОСТАВШИЙСЯ БЛОКЕР: Telegram — TCP-блокировка ВСЕХ IP
+На новом VPS **все IP Telegram (149.154.x.x, 91.108.x.x) блокируются на уровне TCP**
+(даже connect не проходит) — жёстче, чем раньше: DNS-пиннинг бесполезен.
+`/status` боту не отвечает; в hybrid.log `send_to failed: timed out`.
+
+**Решение в работе: релей через крипто-VPS** (168.222.143.103, trade.aliterra.space,
+SSH root, plink с ПК юзера работает). С крипто-VPS Telegram доступен (149.154.167.220 → 302).
+В Caddy крипто-VPS добавлен маршрут **`/tgrelay-fx99/*`** → https://149.154.167.220
+(Host/SNI api.telegram.org), конфиг валиден, перезагружен. Тест с ПК давал 502 —
+вероятно https-транспорт Caddy к IP требует доработки (tls_server_name задан;
+проверить `trade.aliterra.space/tgrelay-fx99/bot<токен>/getMe`).
+**Дальше:** добить релей → в notifier.py добавить TELEGRAM_API_BASE (базовый URL
+вместо api.telegram.org) → в .env VPS: `TELEGRAM_API_BASE=https://trade.aliterra.space/tgrelay-fx99`
+→ перезапуск fxbot-telegram. Бэкап Caddyfile на крипто-VPS: /etc/caddy/Caddyfile.bak.*
+
+### ⚠️ Безопасность — сделать сразу после починки Telegram
+1. **Перевыпустить GitHub-токен ghp_42HU...** (светился в чате и на VPS)
+2. **Удалить release `vps-data`** (id 378694659) — там bot.db и скрипты с секретами
+3. Сменить пароль Administrator VPS и root крипто-VPS (светились в переписке)
+4. Telegram-токен бота тоже светился — перевыпустить у @BotFather (и обновить .env)
+
+### Прочее
+- AAAA-запись fxbot.space удалена юзером (была парковка REG.RU — IPv6 уводил мимо)
+- 409 Conflict больше не воспроизводится (второй поллер исчез после переустановки)
+- MT5-инсталлер и данные лежат в release vps-data (fxdata.zip, mt5setup.exe)
+
+---
 
 Торговый бот на MT5 (PU Prime, демо) + Telegram-канал сигналов + веб-панели.
 **Пять ботов** в одном проекте, каждый — отдельный процесс, отдельная рамка в админке:
