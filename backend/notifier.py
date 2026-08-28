@@ -45,7 +45,8 @@ _TG_FILE = config.DATA_DIR / "telegram.json"
 
 
 def _api(method: str, params: dict | None = None, timeout: int = 15) -> dict:
-    url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/{method}"
+    base = config.TELEGRAM_API_BASE.rstrip("/")
+    url = f"{base}/bot{config.TELEGRAM_BOT_TOKEN}/{method}"
     data = urllib.parse.urlencode(params or {}).encode()
     with urllib.request.urlopen(url, data=data, timeout=timeout) as r:
         return json.loads(r.read().decode())
@@ -132,9 +133,10 @@ def send_photo(path, caption: str = ""):
     if not target:
         return
     try:
+        base = config.TELEGRAM_API_BASE.rstrip("/")
         with open(path, "rb") as f:
             requests.post(
-                f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendPhoto",
+                f"{base}/bot{config.TELEGRAM_BOT_TOKEN}/sendPhoto",
                 data={"chat_id": target, "caption": caption[:1024]},
                 files={"photo": f}, timeout=30)
     except Exception as e:  # noqa: BLE001

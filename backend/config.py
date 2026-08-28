@@ -193,6 +193,7 @@ COPIER_STATE_FILE = "state_copier.json"
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")  # в .env
 TELEGRAM_API_IPS = os.getenv("TELEGRAM_API_IPS", "")  # пиннинг IP api.telegram.org (обход блокировки РКН)
+TELEGRAM_API_BASE = os.getenv("TELEGRAM_API_BASE", "https://api.telegram.org")  # базовый URL (или релей через другой хост)
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # авто-привязка по первому /start
 TELEGRAM_CHANNEL = os.getenv("TELEGRAM_CHANNEL", "@forex_vip_first")  # пусто → рассылка подписчикам
 
