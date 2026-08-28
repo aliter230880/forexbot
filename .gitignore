@@ -16,3 +16,5 @@ kiro/data/
 kiro/models/*.json
 kiro/logs/
 vps.rdp
+_server/
+_mt5data/

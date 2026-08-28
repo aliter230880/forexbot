@@ -6,12 +6,39 @@
 """
 import json
 import logging
+import socket
 import urllib.parse
 import urllib.request
 
 from . import config, storage
 
 log = logging.getLogger("notify")
+
+
+def _pin_telegram_dns():
+    """Обход блокировки api.telegram.org (RKN): резолвим только на рабочие IP.
+
+    SNI/Host остаются api.telegram.org (валидный TLS), меняется только адрес
+    подключения — как _PinnedIPTransport в крипто-боте. Пусто в env → патч выключен.
+    """
+    ips = [s.strip() for s in config.TELEGRAM_API_IPS.split(",") if s.strip()]
+    if not ips:
+        return
+    orig = socket.getaddrinfo
+
+    def patched(host, port, *args, **kwargs):
+        if host == "api.telegram.org":
+            out = []
+            for ip in ips:
+                out.extend(orig(ip, port, socket.AF_INET, socket.SOCK_STREAM))
+            return out
+        return orig(host, port, *args, **kwargs)
+
+    socket.getaddrinfo = patched
+    log.info("telegram DNS pinned to %s", ips)
+
+
+_pin_telegram_dns()
 
 _offset = 0  # offset для getUpdates
 _TG_FILE = config.DATA_DIR / "telegram.json"
