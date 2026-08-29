@@ -59,7 +59,7 @@
 <aside class="sidebar">
   <div class="logo">⚡ Gibrid<span>-bot</span></div>
   <a class="nav-item active" data-page="overview">📊 Обзор</a>
-  <a class="nav-item" data-page="history">📜 История пар</a>
+  <a class="nav-item" data-page="history">📜 История сделок</a>
   <a class="nav-item" data-page="events">🔔 События</a>
   <div class="side-note">
     PU Prime · Demo<br>плечо 1:500<br>обновление 10 сек
@@ -68,7 +68,8 @@
 <main class="main">
   <div class="header">
     <h1>Gibrid-bot</h1>
-    <span class="pill p-gold">ДЕМО-СЧЁТ</span>
+    <span class="pill p-gold" id="mode-pill">ДЕМО-СЧЁТ</span>
+    <span class="pill p-green" id="status-pill">● торгует</span>
     <span class="pill p-green">✔ Данные с торгового сервера</span>
     <span class="updated" id="updated"></span>
   </div>
@@ -109,13 +110,13 @@
         <div class="card"><div class="label">Баланс</div><div class="value" id="acc_balance">—</div><div class="note">USD</div></div>
         <div class="card"><div class="label">Свободная маржа</div><div class="value" id="acc_free">—</div><div class="note" id="acc_margin_note"></div></div>
         <div class="card"><div class="label">Margin Level</div><div class="value" id="acc_ml">—</div><div class="note">норма &gt; 300%</div></div>
-        <div class="card"><div class="label">Золото в позициях</div><div class="value" id="acc_gold">—</div><div class="note" id="acc_gold_note"></div></div>
+        <div class="card"><div class="label">PnL сегодня</div><div class="value" id="acc_gold">—</div><div class="note" id="acc_gold_note"></div></div>
       </div>
     </div>
 
     <div class="section"><h2>Gibrid-bot</h2>
       <table><thead><tr>
-        <th>Symbol</th><th>Брокер</th><th>Диапазон сетки</th><th>Уровни</th><th>Ордера</th><th>PnL</th><th>Статус</th>
+        <th>Инструменты</th><th>Брокер</th><th>Winrate</th><th>Сделок сегодня</th><th>Открыто / закрыто</th><th>PnL</th><th>Статус</th>
       </tr></thead><tbody>
         <tr>
           <td><b style="color:#fff" id="t_symbol">XAUUSD.s</b></td>
@@ -135,18 +136,18 @@
   <!-- ИСТОРИЯ -->
   <div class="page" id="page-history">
     <div class="cards">
-      <div class="card"><div class="label">Закрыто пар</div><div class="value" id="h_closed">—</div></div>
-      <div class="card"><div class="label">Средний PnL / пару</div><div class="value" id="h_avg">—</div></div>
+      <div class="card"><div class="label">Закрыто сделок</div><div class="value" id="h_closed">—</div></div>
+      <div class="card"><div class="label">Средний PnL / сделку</div><div class="value" id="h_avg">—</div></div>
       <div class="card"><div class="label">Лучшая / худшая</div><div class="value" id="h_best" style="font-size:16px">—</div></div>
       <div class="card"><div class="label">Winrate</div><div class="value" id="h_wr">—</div></div>
     </div>
-    <div class="section"><h2>Закрытые пары</h2>
+    <div class="section"><h2>Закрытые сделки</h2>
       <table><thead><tr>
-        <th>Закрыта (UTC)</th><th>Buy</th><th>Sell</th><th>Лот</th><th>PnL</th><th>Затраты</th><th>#</th>
+        <th>Закрыта (UTC)</th><th>Вход</th><th>Выход</th><th>Лот</th><th>PnL</th><th>Причина</th><th>#</th>
       </tr></thead><tbody id="closedBody"></tbody></table></div>
-    <div class="section"><h2>Открытые пары</h2>
+    <div class="section"><h2>Открытые сделки</h2>
       <table><thead><tr>
-        <th>Открыта (UTC)</th><th>Buy</th><th>TP</th><th>Лот</th><th>#</th>
+        <th>Открыта (UTC)</th><th>Вход</th><th>TP</th><th>Лот</th><th>#</th>
       </tr></thead><tbody id="openBody"></tbody></table></div>
   </div>
 
@@ -171,15 +172,15 @@ document.querySelectorAll('.nav-item').forEach(el => el.addEventListener('click'
 
 async function load() {
   try {
-    const [sum, eq, closed, open, ev] = await Promise.all([
-      fetch('/api/summary').then(r=>r.json()),
-      fetch('/api/equity?hours=24').then(r=>r.json()),
-      fetch('/api/pairs?status=closed&limit=200').then(r=>r.json()),
-      fetch('/api/pairs?status=open').then(r=>r.json()),
-      fetch('/api/events?limit=50').then(r=>r.json()),
-    ]);
+const [sum, eq, closed, open, ev] = await Promise.all([
+        fetch('/api/hybrid_summary').then(r=>r.json()),
+        fetch('/api/equity?hours=24').then(r=>r.json()),
+        fetch('/api/hybrid_pairs?status=closed&limit=200').then(r=>r.json()),
+        fetch('/api/hybrid_pairs?status=open').then(r=>r.json()),
+        fetch('/api/events?limit=50').then(r=>r.json()),
+      ]);
     cached = {sum, closed, open};
-    const s = sum.snapshot || {}, st = sum.state, g = sum.grid;
+    const s = sum.snapshot || {}, st = sum.state;
 
     // шапка
     const pill = document.getElementById('status-pill');
@@ -187,13 +188,16 @@ async function load() {
     else if (st.trend_paused) { pill.textContent = '⚠️ пауза тренда'; pill.className = 'pill p-gold'; }
     else if (st.weekend_flat) { pill.textContent = '🗓 weekend'; pill.className = 'pill p-gold'; }
     else { pill.textContent = '● торгует'; pill.className = 'pill p-green'; }
+    const mode = document.getElementById('mode-pill');
+    if (sum.account_mode === 'real') { mode.textContent = 'РЕАЛЬНЫЙ СЧЁТ'; mode.className = 'pill p-green'; }
+    else { mode.textContent = 'ДЕМО-СЧЁТ'; mode.className = 'pill p-gold'; }
     document.getElementById('updated').textContent = 'обновлено ' + new Date().toLocaleTimeString();
 
     // карточки обзора
     const pnl = sum.stats.realized_pnl;
     document.getElementById('pnl').textContent = sign(pnl);
     document.getElementById('pnl').className = 'value ' + cls(pnl);
-    document.getElementById('pairs_note').textContent = sum.stats.closed_pairs + ' пар закрыто';
+    document.getElementById('pairs_note').textContent = sum.stats.closed_pairs + ' сделок закрыто';
     document.getElementById('equity').textContent = '$' + fmt(s.equity);
     document.getElementById('balance_note').textContent = 'баланс $' + fmt(s.balance);
     document.getElementById('floating').textContent = s.floating != null ? sign(s.floating) : '—';
@@ -206,15 +210,16 @@ async function load() {
     document.getElementById('acc_free').textContent = '$' + fmt(s.margin_free);
     document.getElementById('acc_margin_note').textContent = 'маржа занята: $' + fmt(s.margin);
     document.getElementById('acc_ml').textContent = s.margin_level ? fmt(s.margin_level, 0) + '%' : '—';
-    const oz = (s.positions||0) * g.lot * 100;
-    document.getElementById('acc_gold').textContent = oz ? oz.toFixed(0) + ' oz' : '—';
-    document.getElementById('acc_gold_note').textContent = oz ? ('≈ $' + fmt(oz * (s.grid_high || 0)) + ' номинал') : 'нет позиций';
+    const pnlToday = sum.stats.pnl_today;
+    document.getElementById('acc_gold').textContent = sign(pnlToday);
+    document.getElementById('acc_gold').className = 'value ' + cls(pnlToday);
+    document.getElementById('acc_gold_note').textContent = sum.stats.trades_today + ' сделок за сегодня';
 
     // таблица бота
     document.getElementById('t_symbol').textContent = sum.symbol;
-    document.getElementById('t_range').textContent = (s.grid_low && s.grid_high) ? fmt(s.grid_low) + ' – ' + fmt(s.grid_high) : '—';
-    document.getElementById('t_levels').textContent = (s.buy_levels != null ? s.buy_levels : '—') + ' / ' + g.levels;
-    document.getElementById('t_orders').textContent = (s.buy_levels||0) + ' open · ' + (sum.stats.closed_pairs + sum.stats.open_pairs) + ' filled';
+    document.getElementById('t_range').textContent = fmt(sum.stats.winrate, 1) + '%';
+    document.getElementById('t_levels').textContent = sum.stats.trades_today;
+    document.getElementById('t_orders').textContent = sum.stats.open_pairs + ' open · ' + sum.stats.closed_pairs + ' closed';
     document.getElementById('t_pnl').innerHTML = '<span class="' + cls(pnl) + '">' + sign(pnl) + '</span>';
     document.getElementById('t_status').innerHTML = pill.cloneNode(true).outerHTML;
 
@@ -242,15 +247,16 @@ async function load() {
       document.getElementById('h_wr').textContent = (100 * wins / closed.length).toFixed(0) + '% (' + wins + '/' + closed.length + ')';
     }
     document.getElementById('closedBody').innerHTML = closed.map(r =>
-      `<tr><td>${r.close_time||''}</td><td>${fmt(r.buy_price)}</td><td>${fmt(r.sell_price)}</td><td>${r.lot}</td>
-       <td class="${cls(r.pnl)}">${sign(r.pnl)}</td><td>$${fmt(r.costs)}</td><td>#${r.buy_ticket}</td></tr>`).join('')
+      `<tr><td>${r.close_time||''}</td><td>${r.symbol||''} ${r.side||''} ${fmt(r.buy_price)}</td><td>${fmt(r.sell_price)}</td><td>${r.lot}</td>
+       <td class="${cls(r.pnl)}">${sign(r.pnl)}</td><td>${r.reason||''}</td><td>#${r.buy_ticket}</td></tr>`).join('')
       || '<tr><td colspan="7" style="color:#8b949e">пока пусто</td></tr>';
     document.getElementById('openBody').innerHTML = open.map(r =>
-      `<tr><td>${r.open_time||''}</td><td>${fmt(r.buy_price)}</td><td>${fmt(r.buy_price + g.tp_usd)}</td><td>${r.lot}</td><td>#${r.buy_ticket}</td></tr>`).join('')
+      `<tr><td>${r.open_time||''}</td><td>${r.symbol||''} ${r.side||''} ${fmt(r.buy_price)}</td><td>${fmt(r.tp)}</td><td>${r.lot}</td><td>#${r.buy_ticket}</td></tr>`).join('')
       || '<tr><td colspan="5" style="color:#8b949e">открытых нет</td></tr>';
 
     // события
-    document.getElementById('events').innerHTML = ev.map(r =>
+    const evHybrid = ev.filter(r => ['hybrid','halt','resume'].includes(r.kind));
+    document.getElementById('events').innerHTML = evHybrid.map(r =>
       `<div><span class="ts">${r.ts}</span>${r.message}</div>`).join('') || 'пусто';
   } catch (e) {
     document.getElementById('updated').textContent = 'ошибка: ' + e;

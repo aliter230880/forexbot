@@ -128,6 +128,63 @@ def events(limit: int = 30):
     return JSONResponse([_row(r) for r in storage.events_recent(limit)])
 
 
+def _hybrid_state() -> dict:
+    try:
+        return json.loads(
+            (config.DATA_DIR / config.HYBRID_STATE_FILE).read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+@app.get("/api/hybrid_summary")
+def hybrid_summary():
+    """Публичная сводка гибрида — та же форма ответа, что у /api/summary."""
+    h = storage.hybrid_stats()
+    state = _hybrid_state()
+    return JSONResponse({
+        "profile": "HYBRID",
+        "stats": {
+            "realized_pnl": h["realized_pnl"],
+            "total_costs": 0.0,
+            "closed_pairs": h["closed_trades"],
+            "open_pairs": h["open_trades"],
+            "winrate": h["winrate"],
+            "trades_today": h["trades_today"],
+            "pnl_today": h["pnl_today"],
+        },
+        "snapshot": _row(storage.snapshot_latest()),
+        "state": {
+            "halted": state.get("halted", False),
+            "halted_reason": state.get("halted_reason", ""),
+            "trend_paused": False,
+            "weekend_flat": state.get("weekend_flat", False),
+        },
+        "symbol": ", ".join(s.strip() for s in config.HYBRID_SYMBOLS),
+        "grid": {"levels": config.HYBRID_MAX_POS_TOTAL, "step_usd": 0.0,
+                 "lot": config.HYBRID_LOT, "tp_usd": 0.0},
+        "per_symbol": h["per_symbol"],
+        "account_mode": config.TRADING_MODE,
+    })
+
+
+@app.get("/api/hybrid_pairs")
+def hybrid_pairs(status: str = "closed", limit: int = 200):
+    """Сделки гибрида в форме «пар», которую ждёт публичная страница."""
+    if status == "open":
+        return JSONResponse([
+            {"buy_price": r["entry"], "lot": config.HYBRID_LOT,
+             "open_time": r["open_time"], "buy_ticket": r["ticket"],
+             "side": r["side"], "sl": r["sl"], "tp": r["tp"],
+             "symbol": r["symbol"], "status": "open"}
+            for r in storage.hybrid_open_trades()])
+    return JSONResponse([
+        {"buy_price": r["entry"], "sell_price": r["exit"], "lot": config.HYBRID_LOT,
+         "pnl": r["pnl"], "costs": 0.0, "close_time": r["close_time"],
+         "open_time": r["open_time"], "buy_ticket": r["ticket"], "side": r["side"],
+         "reason": r["reason"], "symbol": r["symbol"], "status": r["status"]}
+        for r in storage.hybrid_closed(limit)])
+
+
 # ---------- админские API ----------
 
 @app.get("/api/admin/subscribers")
