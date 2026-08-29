@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>XAUUSD Grid Bot — проверенная статистика</title>
+<title>Gibrid-bot — проверенная статистика</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   .trust-banner { background: linear-gradient(90deg, rgba(56,139,253,.12), rgba(210,153,34,.10)); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; font-size: 13px; }
@@ -57,7 +57,7 @@
 </head>
 <body>
 <aside class="sidebar">
-  <div class="logo">⚡ Grid<span>FX</span></div>
+  <div class="logo">⚡ Gibrid<span>-bot</span></div>
   <a class="nav-item active" data-page="overview">📊 Обзор</a>
   <a class="nav-item" data-page="history">📜 История пар</a>
   <a class="nav-item" data-page="events">🔔 События</a>
@@ -67,7 +67,7 @@
 </aside>
 <main class="main">
   <div class="header">
-    <h1>XAUUSD Grid Bot</h1>
+    <h1>Gibrid-bot</h1>
     <span class="pill p-gold">ДЕМО-СЧЁТ</span>
     <span class="pill p-green">✔ Данные с торгового сервера</span>
     <span class="updated" id="updated"></span>
@@ -78,6 +78,20 @@
     без ручного ввода. Все сигналы канала соответствуют этим сделкам 1-к-1.
     <div class="links" style="margin-top:8px">
       <a href="https://t.me/forex_vip_first" target="_blank">📢 Канал сигналов @forex_vip_first</a>
+    </div>
+  </div>
+
+  <!-- Блоки витрины: сейчас активен ДЕМО; РЕАЛ+копитрейдинг зарезервирован -->
+  <div class="cards" style="margin-bottom:16px">
+    <div class="card" style="border:1px solid #2ea043">
+      <div class="label">📊 Демо-результаты</div>
+      <div class="value" style="color:#2ea043">Активно</div>
+      <div class="note">торговля Гибрида на демо-счёте PU Prime · сигналы 1-к-1</div>
+    </div>
+    <div class="card" style="opacity:.6">
+      <div class="label">💰 Реальные счета + копитрейдинг</div>
+      <div class="value">Скоро</div>
+      <div class="note">после demo-фазы: живые счета, зеркалирование сделок подписчикам</div>
     </div>
   </div>
 
@@ -99,7 +113,7 @@
       </div>
     </div>
 
-    <div class="section"><h2>Grid Bot</h2>
+    <div class="section"><h2>Gibrid-bot</h2>
       <table><thead><tr>
         <th>Symbol</th><th>Брокер</th><th>Диапазон сетки</th><th>Уровни</th><th>Ордера</th><th>PnL</th><th>Статус</th>
       </tr></thead><tbody>
@@ -246,4 +260,6 @@ load();
 setInterval(load, 10000);
 </script>
 </body>
+</html>
+
 </html>

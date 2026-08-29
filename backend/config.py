@@ -197,6 +197,18 @@ TELEGRAM_API_BASE = os.getenv("TELEGRAM_API_BASE", "https://api.telegram.org")  
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # авто-привязка по первому /start
 TELEGRAM_CHANNEL = os.getenv("TELEGRAM_CHANNEL", "@forex_vip_first")  # пусто → рассылка подписчикам
 
+# --- Режим торговли (витрина: канал / статус / сайт) ---
+# demo — показываем демо-сделки (сейчас); real — переключимся на реальные счета + копитрейдинг.
+# Одна переменная управляет: какие сделки транслируются в канал, что показывает /status и сайт.
+TRADING_MODE = os.getenv("TRADING_MODE", "demo").lower()  # demo | real
+# Пометка в сигналах, чтобы подписчики не путали демо и реал.
+TRADE_MODE_TAG = "[ДЕМО]" if TRADING_MODE != "real" else "[LIVE]"
+
+# --- Трансляция сделок Гибрида в канал ---
+HYBRID_CHANNEL_SIGNALS = os.getenv("HYBRID_CHANNEL_SIGNALS", "1") == "1"  # вкл/выкл трансляцию гибрида
+HYBRID_SIGNAL_FILLS = os.getenv("HYBRID_SIGNAL_FILLS", "1") == "1"        # слать входы (FILL)
+HYBRID_SIGNAL_CLOSES = os.getenv("HYBRID_SIGNAL_CLOSES", "1") == "1"      # слать закрытия (CLOSED)
+
 # --- Админ-панель ---
 ADMIN_USER = os.getenv("ADMIN_USER", "dim230880")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "")  # в .env

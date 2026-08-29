@@ -224,6 +224,15 @@ class HybridBot:
                 "h1_trend": self.state["grid_trend"].get(p.symbol, "?"),
             })
             log.info("HYBRID FILL %s %s @ %.5f", p.symbol, side, p.price_open)
+            if config.HYBRID_SIGNAL_FILLS:
+                from .notifier import send_signal
+                arrow = "🟢" if side == "LONG" else "🔴"
+                trend = self.state["grid_trend"].get(p.symbol, "?")
+                send_signal(
+                    f"{arrow} ГИБРИД ВХОД {p.symbol} {side}\n"
+                    f"Цена: {p.price_open:.5f}\n"
+                    f"TP: {p.tp:.5f} · SL: {p.sl:.5f}\n"
+                    f"Тренд H1: {trend}")
         for t in storage.hybrid_open_trades():
             if t["ticket"] in live:
                 continue
@@ -240,6 +249,14 @@ class HybridBot:
             log.info("HYBRID CLOSED %s %s %s → %.5f pnl %.2f | WR %.0f%% итого %.2f",
                      t["symbol"], t["side"], reason, d.price, pnl,
                      s["winrate"], s["realized_pnl"])
+            if config.HYBRID_SIGNAL_CLOSES:
+                from .notifier import send_signal
+                mark = "✅" if pnl >= 0 else "🔻"
+                reason_txt = {"tp": "тейк", "sl": "стоп", "manual": "закрытие"}.get(reason, reason)
+                send_signal(
+                    f"{mark} ГИБРИД ЗАКРЫТ {t['symbol']} {t['side']} ({reason_txt})\n"
+                    f"PnL: {pnl:+.2f}$\n"
+                    f"Winrate: {s['winrate']:.0f}% · итого: {s['realized_pnl']:+.2f}$")
 
     # ---------- защита ----------
 

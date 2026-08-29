@@ -114,6 +114,14 @@ def send(text: str):
             log.warning("telegram send %s failed: %s", cid, e)
 
 
+def send_signal(text: str):
+    """Сигнал в канал с пометкой режима (demo/real). Уважает HYBRID_CHANNEL_SIGNALS."""
+    if not config.HYBRID_CHANNEL_SIGNALS:
+        return
+    tag = config.TRADE_MODE_TAG
+    send(f"{tag} {text}")
+
+
 def send_to(cid: str, text: str):
     """Ответ в конкретный чат."""
     if not config.TELEGRAM_BOT_TOKEN:
@@ -169,26 +177,29 @@ def poll_commands(bot):
             else:
                 send_to(cid, "✅ Бот уже активен. /status — сводка")
         elif text.startswith("/help"):
-            send_to(cid, "🤖 Forex grid bot — ДЕМО XAUUSD (PU Prime, открытый доступ)\n"
+            _m = "ДЕМО" if config.TRADING_MODE != "real" else "РЕАЛ"
+            send_to(cid, f"🤖 Gibrid-bot — {_m} (Forex, PU Prime)\n"
                          "/status — состояние\n/start — возобновить после стопа\n/stop — полный стоп\n"
                          "Все, кто пишет боту, получают уведомления о сделках")
         elif text.startswith("/status"):
+            # Витрина = ГИБРИД (ведущий бот). Пометка режима demo/real.
+            tag = config.TRADE_MODE_TAG
+            mode_line = ("Режим: ДЕМО (тестовые сделки)" if config.TRADING_MODE != "real"
+                         else "Режим: 🟢 РЕАЛ (живые счета)")
+            hy = storage.hybrid_stats()
+            lines = [f"📊 Статус Gibrid-bot {tag}", mode_line,
+                     f"Гибрид PnL: {hy['realized_pnl']:+.2f}$ ({hy['closed_pairs']} сделок)",
+                     f"Winrate: {hy['winrate']:.0f}%"]
             try:
                 s = bot.status()
-                send_to(cid,
-                        "📊 Статус\n"
-                        f"Equity: {s['account']['equity']:.2f} {s['account']['currency']} "
-                        f"(баланс {s['account']['balance']:.2f})\n"
-                        f"Реализованный PnL: {s['realized_pnl']:.2f}$ ({s['closed_pairs']} пар)\n"
-                        f"Плавающий PnL: {s['floating_pnl']:.2f}$ ({s['positions']} позиций)\n"
-                        f"Buy-уровней в сетке: {s['buy_limits']}\n"
-                        f"Halted: {s['halted']} {s['halted_reason']}\n"
-                        f"Тренд-пауза: {s['trend_paused']}, weekend flat: {s['weekend_flat']}")
+                lines.append(f"Equity счёта: {s['account']['equity']:.2f} "
+                             f"{s['account']['currency']} (баланс {s['account']['balance']:.2f})")
+                lines.append(f"Открытых позиций: {s['positions']} · плавающий PnL: {s['floating_pnl']:+.2f}$")
             except Exception:  # noqa: BLE001
-                st = storage.stats()
-                send_to(cid, f"📊 Терминал выключен (бот в стопе). "
-                             f"Реализованный PnL: {st['realized_pnl']:+.2f}$ ({st['closed_pairs']} пар)\n"
-                             f"Подписчиков: {len(subscribers())}\n▶️ /start — поднять торговлю")
+                lines.append("(терминал сейчас недоступен — статистика гибрида из БД)")
+            if config.TRADING_MODE != "real":
+                lines.append("\n💰 Реальные счета + копитрейдинг — скоро.")
+            send_to(cid, "\n".join(lines))
         elif text.startswith("/stop"):
             bot._halt("команда /stop из Telegram")
             bot.shutdown_terminal()
