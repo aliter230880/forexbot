@@ -1,7 +1,94 @@
-# Forex Bot — CONTEXT v2.5
-**Дата обновления:** 2026-08-28 (ночь)
+# Forex Bot — CONTEXT v2.6
+**Дата обновления:** 2026-08-29 (утро)
 
-## ✅ СЕССИЯ 28.08 НОЧЬ — TELEGRAM ЧЕРЕЗ РЕЛЕЙ ЗАРАБОТАЛ (читать первым!)
+## ✅ СЕССИЯ 29.08 УТРО — РЕЛЕЙ + РЕБРЕНДИНГ Gibrid-bot + ТРАНСЛЯЦИЯ ГИБРИДА (читать первым!)
+
+Сессия закрыла два больших блока: (1) добила Telegram-релей до рабочего состояния
+end-to-end; (2) переключила «витрину» (бот `/status` + канал + сайты) со старой
+сетки/grid на **гибрид** — с ребрендингом в **Gibrid-bot** и заделом под будущий
+переход на реальные счета + копитрейдинг.
+
+### 1. Telegram-релей — РАБОТАЕТ (детали в разделе ниже «СЕССИЯ 28.08 НОЧЬ»)
+- Релей `https://trade.aliterra.space/tgrelay-fx99` на крипто-VPS (Caddy) — проверен
+  end-to-end: getMe / getWebhookInfo / sendMessage → все 200, `pending_update_count=0`,
+  409 Conflict отсутствует.
+- Проверено, что Caddy крипто-VPS обслуживает РЕАЛЬНО (не устаревший handoff):
+  **ai / trade / promo / unidev(+www) / parser.unidev.space** — все целы, релей
+  добавлен отдельным `handle /tgrelay-fx99/*` внутри блока trade, соседи не задеты.
+  Бэкап `/etc/caddy/Caddyfile.bak.1787944991`.
+
+### 2. Ребрендинг Grid Bot → Gibrid-bot + переключение витрины на гибрид
+**Проблема, которую решали:** `/status` в боте и публичный сайт показывали
+процесс `main` (сетка/grid, запущен halted — «PnL −31.87, Halted:True»), тогда как
+реально торгует и зарабатывает **гибрид** (`main_hybrid`, +$52.84 WR 84%). Витрина
+показывала «мёртвый» бот. Плюс сайты имели старый бренд «XAUUSD Grid Bot».
+
+**Что сделано (коммиты 25f7e04 + f9a9b20 в main):**
+
+| Файл | Изменение |
+|------|-----------|
+| `config.py` | + `TRADING_MODE` (demo\|real), `TRADE_MODE_TAG` ([ДЕМО]/[LIVE]); + `HYBRID_CHANNEL_SIGNALS` / `HYBRID_SIGNAL_FILLS` / `HYBRID_SIGNAL_CLOSES` (все дефолт 1) |
+| `notifier.py` | + `send_signal(text)` — шлёт в канал с тегом режима, уважает HYBRID_CHANNEL_SIGNALS; `/status` ПЕРЕПИСАН на `storage.hybrid_stats()` (гибрид, а не сетка) + строка режима + «💰 Реальные счета — скоро» в demo; `/help` → бренд Gibrid-bot |
+| `hybrid_engine.py` | в `sync()`: на FILL → `send_signal("🟢/🔴 ГИБРИД ВХОД …")`, на CLOSED → `send_signal("✅/🔻 ГИБРИД ЗАКРЫТ … PnL/WR/итого")` |
+| `static/user.html` | бренд → **Gibrid-bot** (title/логотип «⚡ Gibrid-bot»/h1/секция); + 2 блока витрины: «📊 Демо-результаты (Активно)» и «💰 Реальные счета + копитрейдинг (Скоро)» |
+| `static/admin.html` | title + h1 → Gibrid-bot |
+
+**Концепция режима (важно на будущее):** одна переменная `.env` `TRADING_MODE=demo|real`
+управляет всей витриной. Сейчас `demo` → сигналы/статус/сайт помечены `[ДЕМО]`,
+на сайте активен блок «Демо». Переход на реал = поменять на `real` + рестарт →
+тег станет `[LIVE]`, статус/канал начнут писать про реальные счета. Блок
+«Реальные счета + копитрейдинг» на сайте уже зарезервирован (placeholder «Скоро»).
+
+**Решение по трансляции:** слать в канал И входы, И закрытия (по указанию юзера;
+изначально предлагалось только закрытия из-за 25-40 сделок/день у гибрида).
+
+### 3. Деплой на VPS (через RDP-буфер, без токенов)
+- Способ: файлы → base64 → `Set-Clipboard` на ПК → Ctrl+V в PowerShell на VPS →
+  `[IO.File]::WriteAllBytes(...FromBase64String(...))`. Обходит и кириллицу
+  Server 2016, и необходимость светить GitHub-токен. Работает надёжно.
+- `.env` VPS: добавлен `TRADING_MODE=demo` (стр.13), `TELEGRAM_API_BASE` уже был (стр.11).
+- **Грабли деплоя, которые ловили:**
+  1. `schtasks /Run /TN fxbot-web` НЕ перезапустил webapp (PID остались вчерашние 22:02)
+     → сайт отдавал старый HTML. Лечится: убить python-процессы webapp вручную
+     (`Stop-Process`) → `schtasks /Run`. Проверка: `Invoke-WebRequest localhost:8181`
+     → `-match 'Gibrid-bot'` = True.
+  2. **`/status` падал молча** — `KeyError 'closed_pairs'`: `hybrid_stats()` возвращает
+     ключ **`closed_trades`**, а не `closed_pairs` (как у сетки). В логе было
+     `telegram poll failed: 'closed_pairs'`. Фикс f9a9b20 → задеплоен → работает.
+  3. `Get-NetTCPListener` НЕ существует на Server 2016 (PS 5.1 старый) — для проверки
+     портов использовать `netstat`. Но сайт снаружи и так отдаёт HTTPS 200 (порты открыты).
+
+### 4. Процессы на VPS — по одному, дублей НЕТ (проверено 10:42)
+- **hybrid** (main_hybrid, торгует), **main** (/status + TG-команды), **webapp** (сайты).
+- Каждый бот = пара python PID (venv-лаунчер `C:\forexbot\.venv` порождает
+  `C:\Program Files\Python312\python.exe` как дочерний) — это НОРМА, не дубль.
+- Рестарт `fxbot-telegram` поднимает `main` заново; чтобы не плодить дубль getUpdates
+  (→409), при деплое сначала `Stop-Process` старого `backend.main run`, потом Run.
+
+### 5. Проверено вживую юзером (11:09): «работает, сайт работает»
+- `/status` отвечает, сайт fxbot.space открывается с брендом Gibrid-bot.
+- ⚠️ НЕ проверено вживую (первый прогон): реальный формат сигналов гибрида в канале
+  @forex_vip_first при следующей сделке — стоит глянуть `[ДЕМО] 🟢 ГИБРИД ВХОД …`.
+
+### 🔴 Осталось ТОЛЬКО безопасность (secrets светились в чате/на VPS многократно)
+1. **Перевыпустить токен бота** @Dim_forex_bot у @BotFather → `TELEGRAM_BOT_TOKEN`
+   в `.env` VPS → рестарт `fxbot-telegram`. (Токен `8717937940:AAH…` светился в чате ОЧЕНЬ много раз.)
+2. Перевыпустить GitHub-токен `ghp_…`
+3. Удалить GitHub release `vps-data` (id 378694659) — bot.db + скрипты с секретами
+4. Сменить пароли Administrator VPS (185.46.10.179) и root крипто-VPS (168.222.143.103)
+
+### Ключевые адреса/факты сессии (шпаргалка)
+- Форекс-VPS: `185.46.10.179`, Windows Server 2016, Administrator, проект `C:\forexbot`
+- Крипто-VPS (релей): `168.222.143.103` = trade.aliterra.space, SSH root, plink с ПК,
+  hostkey `SHA256:kTPrb01XLPu73Wwm45TIweNoMja2WroQnMRDblRi4e8`
+- Релей URL: `https://trade.aliterra.space/tgrelay-fx99` (+ `/bot<token>/<method>`)
+- Владелец chat_id: `789368186` (DMITRY / @LUXury_CEO)
+- Локальный репозиторий разработки: `E:\AI\AI_folder\forexbot`, git `C:\Program Files\Git\bin\git.exe`
+- Задачи автозапуска: fxbot-terminal / fxbot-hybrid / fxbot-telegram(держит main) / fxbot-web / fxbot-caddy
+
+---
+
+## ✅ СЕССИЯ 28.08 НОЧЬ — TELEGRAM ЧЕРЕЗ РЕЛЕЙ ЗАРАБОТАЛ
 
 **Итог: блокер Telegram закрыт.** На новом VPS Telegram TCP-блокировался целиком
 (даже connect не проходил, IP-пиннинг бесполезен). Решение — **релей через
@@ -468,6 +555,13 @@ SNI валидный). Задеплоено на сервер, процесс п
 | ✅/🔻 ПАРА ЗАКРЫТА | PnL + итог нарастающим итогом |
 | ⚠️ тренд / стоп / weekend | защитные события |
 | ⚡ СКАЛЬП (под флагом) | вход, TP, SL, тренд H1, ADX |
+| 🟢/🔴 ГИБРИД ВХОД (29.08) | инструмент, направление, цена, TP/SL, тренд H1 — с тегом [ДЕМО]/[LIVE] |
+| ✅/🔻 ГИБРИД ЗАКРЫТ (29.08) | причина (тейк/стоп), PnL, winrate, итого — с тегом [ДЕМО]/[LIVE] |
+
+**Трансляция ГИБРИДА в канал ВКЛЮЧЕНА (29.08)** — `send_signal()` в notifier, вызывается
+из `hybrid_engine.sync()` на FILL и CLOSED. Управление: `.env` `HYBRID_CHANNEL_SIGNALS`
+(вкл/выкл всё), `HYBRID_SIGNAL_FILLS` (входы), `HYBRID_SIGNAL_CLOSES` (закрытия) — все дефолт 1.
+Тег `[ДЕМО]`/`[LIVE]` берётся из `TRADING_MODE`. Это основная витрина канала теперь.
 
 **Трансляция скальпа выключена** (`scalp_signals: false` в state) — включается кнопкой
 в админке. Мульти-бот в канал не пишет вообще. Критичные стопы всегда уходят владельцу в личку.
