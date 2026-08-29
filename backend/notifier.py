@@ -188,7 +188,7 @@ def poll_commands(bot):
                          else "Режим: 🟢 РЕАЛ (живые счета)")
             hy = storage.hybrid_stats()
             lines = [f"📊 Статус Gibrid-bot {tag}", mode_line,
-                     f"Гибрид PnL: {hy['realized_pnl']:+.2f}$ ({hy['closed_pairs']} сделок)",
+                     f"Гибрид PnL: {hy['realized_pnl']:+.2f}$ ({hy['closed_trades']} сделок)",
                      f"Winrate: {hy['winrate']:.0f}%"]
             try:
                 s = bot.status()
