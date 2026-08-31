@@ -29,7 +29,11 @@ ROOT = Path(__file__).resolve().parent.parent
 CONFIG = ROOT / "backend" / "config.py"
 NOTIFIER = ROOT / "backend" / "notifier.py"
 
-CFG_ANCHOR = 'TELEGRAM_CHANNEL = os.getenv("TELEGRAM_CHANNEL", "@forex_vip_first")'
+# Якорь = строка целиком, с хвостовым комментарием (config.py:198): замена по
+# короткому префиксу вставила бы блок СРЕДИ строки и уносила комментарий на строку
+# TELEGRAM_OWNER_ID.
+CFG_ANCHOR = ('TELEGRAM_CHANNEL = os.getenv("TELEGRAM_CHANNEL", "@forex_vip_first")'
+              '  # пусто → рассылка подписчикам')
 CFG_ADD = '''
 # Владелец бота: только он может /stop и /start (на live посторонний стоп критичен)
 TELEGRAM_OWNER_ID = os.getenv("TELEGRAM_OWNER_ID", "789368186").strip()'''
