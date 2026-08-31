@@ -199,6 +199,8 @@ TELEGRAM_API_IPS = os.getenv("TELEGRAM_API_IPS", "")  # пиннинг IP api.te
 TELEGRAM_API_BASE = os.getenv("TELEGRAM_API_BASE", "https://api.telegram.org")  # базовый URL (или релей через другой хост)
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # авто-привязка по первому /start
 TELEGRAM_CHANNEL = os.getenv("TELEGRAM_CHANNEL", "@forex_vip_first")  # пусто → рассылка подписчикам
+# Владелец бота: только он может /stop и /start (на live посторонний стоп критичен)
+TELEGRAM_OWNER_ID = os.getenv("TELEGRAM_OWNER_ID", "789368186").strip()
 
 # --- Режим торговли (витрина: канал / статус / сайт) ---
 # demo — показываем демо-сделки (сейчас); real — переключимся на реальные счета + копитрейдинг.

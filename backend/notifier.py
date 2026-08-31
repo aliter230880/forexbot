@@ -171,15 +171,21 @@ def poll_commands(bot):
             send_to(cid, "✅ Подписка оформлена: будешь получать уведомления о сделках.\n"
                          "Команды: /status /start /stop /help")
         text = (msg.get("text") or "").strip().lower()
+        is_owner = (not config.TELEGRAM_OWNER_ID) or cid == config.TELEGRAM_OWNER_ID
         if text.startswith("/start"):
+            if not is_owner:
+                send_to(cid, "🔒 Управление ботом доступно только владельцу.\n"
+                             "Тебе доступны: /status /help")
+                continue
             if bot.state.get("halted"):
                 bot.resume()
             else:
                 send_to(cid, "✅ Бот уже активен. /status — сводка")
         elif text.startswith("/help"):
             _m = "ДЕМО" if config.TRADING_MODE != "real" else "РЕАЛ"
-            send_to(cid, f"🤖 Gibrid-bot — {_m} (Forex, PU Prime)\n"
-                         "/status — состояние\n/start — возобновить после стопа\n/stop — полный стоп\n"
+            _cmds = ("/status — состояние\n/start — возобновить после стопа\n"
+                     "/stop — полный стоп\n" if is_owner else "/status — состояние\n")
+            send_to(cid, f"🤖 Gibrid-bot — {_m} (Forex, PU Prime)\n" + _cmds +
                          "Все, кто пишет боту, получают уведомления о сделках")
         elif text.startswith("/status"):
             # Витрина = ГИБРИД (ведущий бот). Пометка режима demo/real.
@@ -201,9 +207,20 @@ def poll_commands(bot):
                 lines.append("\n💰 Реальные счета + копитрейдинг — скоро.")
             send_to(cid, "\n".join(lines))
         elif text.startswith("/stop"):
+            if not is_owner:
+                send_to(cid, "🔒 Управление ботом доступно только владельцу.\n"
+                             "Тебе доступны: /status /help")
+                continue
             bot._halt("команда /stop из Telegram")
-            bot.shutdown_terminal()
-            send_to(cid, "🛑 Полный стоп: ордера отменены, позиции закрыты, терминал выключен.\n"
-                         "▶️ /start — поднимет терминал и сетку заново")
+            # На реальном счёте терминал НЕ гасим: он общий с гибридом,
+            # его выключение обрывает live-торговлю и связь с брокером.
+            if config.TRADING_MODE != "real":
+                bot.shutdown_terminal()
+                send_to(cid, "🛑 Полный стоп: ордера отменены, позиции закрыты, "
+                             "терминал выключен.\n▶️ /start — поднимет заново")
+            else:
+                send_to(cid, "🛑 Стоп: ордера отменены, позиции закрыты, бот в halt.\n"
+                             "Терминал оставлен включённым (LIVE-режим).\n"
+                             "▶️ /start — возобновить")
         else:
             send_to(cid, "Команды: /status /start /stop /help")
