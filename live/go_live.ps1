@@ -29,10 +29,6 @@ $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 Write-Host '=== 0. PREFLIGHT ==='
 if (-not (Test-Path $py)) { throw "python not found: $py" }
 
-Write-Host '--- git pull (latest live/ scripts and backend fixes) ---'
-& git pull 2>&1 | Write-Host
-if ($LASTEXITCODE -ne 0) { throw 'git pull failed - resolve and re-run' }
-
 Write-Host '--- .env live checks ---'
 $env_lines = Get-Content (Join-Path $root '.env') -ErrorAction Stop
 function Env-Has($key) {
