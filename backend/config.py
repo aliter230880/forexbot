@@ -14,7 +14,10 @@ def _load_env():
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip())
+                # .env — источник истины: перезаписываем даже унаследованные
+                # переменные (иначе планировщик задач со старым env молча
+                # оставлял TRADING_MODE=demo при живом .env с real)
+                os.environ[k.strip()] = v.strip()
 
 
 _load_env()
