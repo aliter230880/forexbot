@@ -82,14 +82,14 @@
     </div>
   </div>
 
-  <!-- Блоки витрины: сейчас активен ДЕМО; РЕАЛ+копитрейдинг зарезервирован -->
+  <!-- Блоки витрины: переключаются по режиму (demo/real) вместе с пилюлей -->
   <div class="cards" style="margin-bottom:16px">
-    <div class="card" style="border:1px solid #2ea043">
+    <div class="card" id="card-demo" style="border:1px solid #2ea043">
       <div class="label">📊 Демо-результаты</div>
       <div class="value" style="color:#2ea043">Активно</div>
       <div class="note">торговля Гибрида на демо-счёте PU Prime · сигналы 1-к-1</div>
     </div>
-    <div class="card" style="opacity:.6">
+    <div class="card" id="card-real" style="opacity:.6">
       <div class="label">💰 Реальные счета + копитрейдинг</div>
       <div class="value">Скоро</div>
       <div class="note">после demo-фазы: живые счета, зеркалирование сделок подписчикам</div>
@@ -192,6 +192,32 @@ const [sum, eq, closed, open, ev] = await Promise.all([
     if (sum.account_mode === 'real') { mode.textContent = 'РЕАЛЬНЫЙ СЧЁТ'; mode.className = 'pill p-green'; }
     else { mode.textContent = 'ДЕМО-СЧЁТ'; mode.className = 'pill p-gold'; }
     document.getElementById('updated').textContent = 'обновлено ' + new Date().toLocaleTimeString();
+
+    // витрина: переключаем карточки демо/реал
+    const isReal = sum.account_mode === 'real';
+    const cardDemo = document.getElementById('card-demo');
+    const cardReal = document.getElementById('card-real');
+    if (cardDemo && cardReal) {
+      if (isReal) {
+        cardDemo.style.opacity = '.6';
+        cardDemo.querySelector('.value').textContent = 'Завершена';
+        cardDemo.querySelector('.value').style.color = '';
+        cardDemo.style.borderColor = '';
+        cardReal.style.opacity = '1';
+        cardReal.querySelector('.value').textContent = 'Активно';
+        cardReal.querySelector('.value').style.color = '#2ea043';
+        cardReal.style.borderColor = '#2ea043';
+      } else {
+        cardDemo.style.opacity = '1';
+        cardDemo.querySelector('.value').textContent = 'Активно';
+        cardDemo.querySelector('.value').style.color = '#2ea043';
+        cardDemo.style.borderColor = '#2ea043';
+        cardReal.style.opacity = '.6';
+        cardReal.querySelector('.value').textContent = 'Скоро';
+        cardReal.querySelector('.value').style.color = '';
+        cardReal.style.borderColor = '';
+      }
+    }
 
     // карточки обзора
     const pnl = sum.stats.realized_pnl;
