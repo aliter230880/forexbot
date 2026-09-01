@@ -25,6 +25,7 @@ import MetaTrader5 as mt5
 import numpy as np
 
 from . import config, storage
+from .hybrid_risk import classify_close_reason, evaluate_metrics
 from .research import ema
 
 log = logging.getLogger("hybrid")
@@ -47,6 +48,11 @@ class HybridBot:
         self.state.setdefault("grid_trend", {})        # symbol -> тренд на момент сборки
         self.state.setdefault("skipped", {})           # symbol -> причина пропуска
         self.state.setdefault("weekend_flat", False)
+        self.state.setdefault("close_reasons", {})
+        self.state.setdefault("day_anchor_date", None)
+        self.state.setdefault("day_anchor_realized", None)
+        self.state.setdefault("day_anchor_balance", None)
+        self.state.setdefault("day_anchor_equity", None)
 
     def _load(self) -> dict:
         try:
@@ -138,25 +144,30 @@ class HybridBot:
         tp_d = max(atr * config.HYBRID_TP_ATR, min_tp)
         step = tp_d                                   # шаг = цель
         sl_d = tp_d * (config.HYBRID_SL_ATR / config.HYBRID_TP_ATR)
-        pv = self.usd_per_price_unit(symbol)
 
-        # риск одной позиции не должен превышать лимит
-        pos_risk_pct = 100 * sl_d * pv / config.HYBRID_TEST_BALANCE
-        # спред не должен съедать цель (главный урок скальпинга: было 25% → убыток)
-        spread_pct_of_tp = 100 * (tick.ask - tick.bid) / tp_d if tp_d > 0 else 999
-        reason = None
-        if pos_risk_pct > config.HYBRID_MAX_POS_RISK_PCT:
-            reason = f"риск позиции {pos_risk_pct:.1f}% > {config.HYBRID_MAX_POS_RISK_PCT}%"
-        elif spread_pct_of_tp > config.HYBRID_MAX_SPREAD_PCT_OF_TP:
-            reason = (f"спред {spread_pct_of_tp:.0f}% от цели "
-                      f"> {config.HYBRID_MAX_SPREAD_PCT_OF_TP:.0f}%")
-        if reason:
-            self.state["skipped"][symbol] = reason
+        risk = evaluate_metrics(
+            symbol=symbol, atr=atr, spread=tick.ask - tick.bid,
+            contract_size=info.trade_contract_size, lot=config.HYBRID_LOT,
+            point=info.point, stops_level=info.trade_stops_level,
+            base=config.HYBRID_TEST_BALANCE, tp_atr=config.HYBRID_TP_ATR,
+            sl_atr=config.HYBRID_SL_ATR,
+            min_tp_spreads=config.HYBRID_MIN_TP_SPREADS,
+            max_spread_pct=config.HYBRID_MAX_SPREAD_PCT_OF_TP,
+            max_pos_risk_pct=config.HYBRID_MAX_POS_RISK_PCT,
+            xau_max_pos_risk_pct=config.HYBRID_XAU_MAX_POS_RISK_PCT,
+        )
+        if not risk["ok"]:
+            self.state["skipped"][symbol] = risk["reason"]
             self._save()
             for o in self.orders(symbol):
                 mt5.order_send({"action": mt5.TRADE_ACTION_REMOVE, "order": o.ticket})
+            log.warning("HYBRID SKIP %s: %s", symbol, risk["reason"])
             return
         self.state["skipped"].pop(symbol, None)
+        # Re-apply broker minimum distance before placing orders and recalculate risk.
+        tp_d = risk["tp_distance"]
+        sl_d = risk["sl_distance"]
+        pos_risk_pct = risk["risk_pct"]
 
         for o in self.orders(symbol):
             mt5.order_send({"action": mt5.TRADE_ACTION_REMOVE, "order": o.ticket})
@@ -241,13 +252,23 @@ class HybridBot:
             if not out:
                 continue
             d = out[-1]
-            reason = "tp" if d.reason == mt5.DEAL_REASON_TP else (
-                "sl" if d.reason == mt5.DEAL_REASON_SL else "manual")
+            mt5_reason = getattr(d, "reason", None)
+            scenario = self.state.get("close_reasons", {}).pop(str(t["ticket"]), None)
+            reason = classify_close_reason(
+                mt5_reason,
+                tp_reason=mt5.DEAL_REASON_TP,
+                sl_reason=mt5.DEAL_REASON_SL,
+                expert_reason=getattr(mt5, "DEAL_REASON_EXPERT", None),
+                client_reason=getattr(mt5, "DEAL_REASON_CLIENT", None),
+                scenario=scenario,
+            )
+            self._save()
             pnl = d.profit + d.commission + d.swap + getattr(d, "fee", 0.0)
             storage.scalp_close(t["ticket"], d.price, round(pnl, 2), reason)
             s = storage.hybrid_stats()
-            log.info("HYBRID CLOSED %s %s %s → %.5f pnl %.2f | WR %.0f%% итого %.2f",
-                     t["symbol"], t["side"], reason, d.price, pnl,
+            log.info("HYBRID CLOSED %s %s %s mt5_reason=%s comment=%s → %.5f pnl %.2f | WR %.0f%% итого %.2f",
+                     t["symbol"], t["side"], reason, mt5_reason,
+                     getattr(d, "comment", ""), d.price, pnl,
                      s["winrate"], s["realized_pnl"])
             if config.HYBRID_SIGNAL_CLOSES:
                 from .notifier import send_signal
@@ -272,7 +293,7 @@ class HybridBot:
                 continue
             # тренд перевернулся — закрываем корзину символа и снимаем лимитки
             floating = sum(p.profit for p in pos)
-            self.close_symbol(sym, f"тренд H1 развернулся {grid_trend}→{now_trend}")
+            self.close_symbol(sym, "emergency_trend")
             log.warning("HYBRID EMERGENCY %s: %s→%s, floating %.2f",
                         sym, grid_trend, now_trend, floating)
             storage.log_event("hybrid", f"{sym}: аварийный выход ({grid_trend}→{now_trend}), "
@@ -283,6 +304,16 @@ class HybridBot:
                                f"плавающий {floating:+.2f}$")
 
     def close_symbol(self, symbol: str, reason: str = ""):
+        if reason.startswith("дневной лимит"):
+            scenario = "daily_limit"
+        elif reason == "stop-all вручную" or reason == "стоп из админ-панели":
+            scenario = "manual_stop"
+        elif reason == "weekend_flat":
+            scenario = "weekend_flat"
+        elif reason == "emergency_trend":
+            scenario = "emergency_trend"
+        else:
+            scenario = reason or "bot_close"
         for o in self.orders(symbol):
             mt5.order_send({"action": mt5.TRADE_ACTION_REMOVE, "order": o.ticket})
         for p in self.positions(symbol):
@@ -290,13 +321,18 @@ class HybridBot:
             if not tick:
                 continue
             is_long = p.type == mt5.POSITION_TYPE_BUY
-            mt5.order_send({
+            res = mt5.order_send({
                 "action": mt5.TRADE_ACTION_DEAL, "symbol": p.symbol,
                 "volume": p.volume, "position": p.ticket,
                 "type": mt5.ORDER_TYPE_SELL if is_long else mt5.ORDER_TYPE_BUY,
                 "price": tick.bid if is_long else tick.ask,
                 "deviation": 30, "magic": config.HYBRID_MAGIC,
-                "type_filling": mt5.ORDER_FILLING_IOC})
+                "type_filling": mt5.ORDER_FILLING_IOC,
+                "comment": f"hybrid_{scenario}"[:31]})
+            if res and res.retcode == mt5.TRADE_RETCODE_DONE:
+                self.state["close_reasons"][str(p.ticket)] = scenario
+            else:
+                log.error("HYBRID close failed #%s scenario=%s result=%s", p.ticket, scenario, res)
         self.state["grid_trend"].pop(symbol, None)
         self.state["last_rebuild"].pop(symbol, None)
         self._save()
@@ -306,12 +342,21 @@ class HybridBot:
         today = now.strftime("%Y-%m-%d")
         s = storage.hybrid_stats()
 
-        if self.state["day_anchor"] is None or self.state["day_anchor"][0] != today:
+        if self.state["day_anchor_date"] != today:
+            acc = mt5.account_info()
+            balance = float(acc.balance) if acc else None
+            equity = float(acc.equity) if acc else None
+            self.state["day_anchor_date"] = today
+            self.state["day_anchor_realized"] = s["realized_pnl"]
+            self.state["day_anchor_balance"] = balance
+            self.state["day_anchor_equity"] = equity
             self.state["day_anchor"] = [today, s["realized_pnl"]]
             self._save()
+            log.info("HYBRID day anchor: date=%s realized=%.2f balance=%s equity=%s",
+                     today, s["realized_pnl"], balance, equity)
 
-        # дневной лимит убытка (от тестовой базы)
-        day_pnl = s["realized_pnl"] - self.state["day_anchor"][1]
+        # дневной лимит убытка (реализованный PnL от текущего UTC-якоря)
+        day_pnl = s["realized_pnl"] - self.state["day_anchor_realized"]
         day_pct = 100 * day_pnl / config.HYBRID_TEST_BALANCE
         if day_pct <= -config.HYBRID_DAILY_LOSS_PCT and not self.state["halted"]:
             self._halt(f"дневной лимит: {day_pct:.1f}% (${day_pnl:.2f})")
@@ -334,7 +379,7 @@ class HybridBot:
         if now.weekday() == 4 and now.hour >= config.HYBRID_WEEKEND_CLOSE_HOUR:
             if not self.state["weekend_flat"]:
                 for sym in [x.strip() for x in config.HYBRID_SYMBOLS]:
-                    self.close_symbol(sym, "weekend flat")
+                    self.close_symbol(sym, "weekend_flat")
                 self.state["weekend_flat"] = True
                 self._save()
                 log.warning("HYBRID weekend flat")
@@ -357,7 +402,10 @@ class HybridBot:
 
     def resume(self):
         self.state.update(halted=False, halted_reason="", day_anchor=None,
-                          weekend_flat=False, grid_trend={}, last_rebuild={})
+                          day_anchor_date=None, day_anchor_realized=None,
+                          day_anchor_balance=None, day_anchor_equity=None,
+                          weekend_flat=False, grid_trend={}, last_rebuild={},
+                          close_reasons={})
         self._save()
         log.info("HYBRID resumed")
 
@@ -424,4 +472,10 @@ class HybridBot:
             "grid_trend": self.state["grid_trend"],
             "test_balance": config.HYBRID_TEST_BALANCE,
             "lot": config.HYBRID_LOT,
+            "day_anchor": {
+                "date": self.state.get("day_anchor_date"),
+                "realized": self.state.get("day_anchor_realized"),
+                "balance": self.state.get("day_anchor_balance"),
+                "equity": self.state.get("day_anchor_equity"),
+            },
         }

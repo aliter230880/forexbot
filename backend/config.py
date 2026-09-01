@@ -156,6 +156,9 @@ HYBRID_REBUILD_SEC = int(os.getenv("HYBRID_REBUILD_SEC", "900"))  # пересб
 HYBRID_TEST_BALANCE = float(os.getenv("HYBRID_TEST_BALANCE", "100"))
 HYBRID_MAX_BASKET_RISK_PCT = float(os.getenv("HYBRID_MAX_BASKET_RISK_PCT", "25"))
 HYBRID_MAX_POS_RISK_PCT = float(os.getenv("HYBRID_MAX_POS_RISK_PCT", "10"))
+# XAUUSD hard cap for the small live account: 5% of risk base.
+# The target working range is 3-5%; above cap, no new grid is placed.
+HYBRID_XAU_MAX_POS_RISK_PCT = float(os.getenv("HYBRID_XAU_MAX_POS_RISK_PCT", "5"))
 # главный урок скальпинга: спред 25% от цели = гарантированный убыток.
 # Лимитка платит спред один раз, но цель всё равно должна быть кратно больше спреда.
 HYBRID_MAX_SPREAD_PCT_OF_TP = float(os.getenv("HYBRID_MAX_SPREAD_PCT_OF_TP", "12"))

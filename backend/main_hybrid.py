@@ -17,6 +17,7 @@ import MetaTrader5 as mt5
 
 from . import config, mt5_gateway as gw, storage
 from .hybrid_engine import HybridBot
+from .hybrid_risk import evaluate_metrics
 
 logging.basicConfig(
     level=logging.INFO,
@@ -113,21 +114,21 @@ def cmd_risk():
         if atr <= 0 or pv <= 0 or not tick:
             print(f"{sym:11} нет данных")
             continue
-        spread_now = tick.ask - tick.bid
-        tp_d = max(atr * config.HYBRID_TP_ATR, spread_now * config.HYBRID_MIN_TP_SPREADS)
-        sl_d = tp_d * (config.HYBRID_SL_ATR / config.HYBRID_TP_ATR)
-        sl_usd, tp_usd = sl_d * pv, tp_d * pv
-        spread_usd = spread_now * pv
-        pct = 100 * sl_usd / config.HYBRID_TEST_BALANCE
-        sp_pct = 100 * (tick.ask - tick.bid) / tp_d if tp_d else 999
-        if pct > config.HYBRID_MAX_POS_RISK_PCT:
-            v = "ПРОПУСК (риск)"
-        elif sp_pct > config.HYBRID_MAX_SPREAD_PCT_OF_TP:
-            v = "ПРОПУСК (спред)"
-        else:
-            v = "OK"
-        print(f"{sym:11} {atr:>10.4f} {sl_usd:>8.2f} {pct:>6.1f}% {tp_usd:>7.2f} "
-              f"{spread_usd:>8.3f} {sp_pct:>8.0f}%  {v}")
+        info = mt5.symbol_info(sym)
+        risk = evaluate_metrics(
+            symbol=sym, atr=atr, spread=tick.ask - tick.bid,
+            contract_size=info.trade_contract_size, lot=config.HYBRID_LOT,
+            point=info.point, stops_level=info.trade_stops_level,
+            base=config.HYBRID_TEST_BALANCE, tp_atr=config.HYBRID_TP_ATR,
+            sl_atr=config.HYBRID_SL_ATR, min_tp_spreads=config.HYBRID_MIN_TP_SPREADS,
+            max_spread_pct=config.HYBRID_MAX_SPREAD_PCT_OF_TP,
+            max_pos_risk_pct=config.HYBRID_MAX_POS_RISK_PCT,
+            xau_max_pos_risk_pct=config.HYBRID_XAU_MAX_POS_RISK_PCT,
+        )
+        v = "OK" if risk["ok"] else "ПРОПУСК (" + risk["reason"] + ")"
+        spread_usd = risk["spread"] * info.trade_contract_size * config.HYBRID_LOT
+        print(f"{sym:11} {atr:>10.4f} {risk['sl_usd']:>8.2f} {risk['risk_pct']:>6.1f}% "
+              f"{risk['tp_usd']:>7.2f} {spread_usd:>8.3f} {risk['spread_pct']:>8.0f}%  {v}")
     print(f"\nмакс. позиций: {config.HYBRID_MAX_POS_PER_SYMBOL}/символ, "
           f"{config.HYBRID_MAX_POS_TOTAL} всего · риск корзины ≤ "
           f"{config.HYBRID_MAX_BASKET_RISK_PCT}% от ${config.HYBRID_TEST_BALANCE:.0f}")

@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import MetaTrader5 as mt5  # noqa: E402
 
 from backend import config  # noqa: E402
+from backend.hybrid_risk import evaluate_metrics  # noqa: E402
 
 
 def line(title: str = ""):
@@ -133,21 +134,23 @@ def check_risk(symbols):
         if atr <= 0 or pv <= 0 or not tick:
             print(f"{sym:14} нет данных (рынок закрыт? выходные — это нормально)")
             continue
-        spread_now = tick.ask - tick.bid
-        tp_d = max(atr * config.HYBRID_TP_ATR, spread_now * config.HYBRID_MIN_TP_SPREADS)
-        sl_d = tp_d * (config.HYBRID_SL_ATR / config.HYBRID_TP_ATR)
-        sl_usd, tp_usd = sl_d * pv, tp_d * pv
-        pct = 100 * sl_usd / base
-        sp_pct = 100 * spread_now / tp_d if tp_d else 999
-        if pct > config.HYBRID_MAX_POS_RISK_PCT:
-            verdict = "ПРОПУСК (риск)"
-        elif sp_pct > config.HYBRID_MAX_SPREAD_PCT_OF_TP:
-            verdict = "ПРОПУСК (спред)"
-        else:
-            verdict = "OK"
+        risk = evaluate_metrics(
+            symbol=sym, atr=atr, spread=tick.ask - tick.bid,
+            contract_size=mt5.symbol_info(sym).trade_contract_size,
+            lot=config.HYBRID_LOT, point=mt5.symbol_info(sym).point,
+            stops_level=mt5.symbol_info(sym).trade_stops_level,
+            base=base, tp_atr=config.HYBRID_TP_ATR, sl_atr=config.HYBRID_SL_ATR,
+            min_tp_spreads=config.HYBRID_MIN_TP_SPREADS,
+            max_spread_pct=config.HYBRID_MAX_SPREAD_PCT_OF_TP,
+            max_pos_risk_pct=config.HYBRID_MAX_POS_RISK_PCT,
+            xau_max_pos_risk_pct=config.HYBRID_XAU_MAX_POS_RISK_PCT,
+        )
+        verdict = "OK" if risk["ok"] else "ПРОПУСК (" + risk["reason"] + ")"
+        if risk["ok"]:
             passed.append(sym)
-        print(f"{sym:14} {atr:>10.4f} {sl_usd:>8.2f} {pct:>6.1f}% {tp_usd:>8.2f} "
-              f"{spread_now * pv:>8.3f} {sp_pct:>8.0f}%  {verdict}")
+        print(f"{sym:14} {atr:>10.4f} {risk['sl_usd']:>8.2f} {risk['risk_pct']:>6.1f}% "
+              f"{risk['tp_usd']:>8.2f} {risk['spread'] * risk['sl_usd'] / risk['sl_distance'] if risk['sl_distance'] else 0:>8.3f} "
+              f"{risk['spread_pct']:>8.0f}%  {verdict}")
 
     print(f"\nпроходят фильтры: {', '.join(passed) if passed else 'НИ ОДИН'}")
     if not passed:
