@@ -137,7 +137,7 @@ def check_risk(symbols):
         risk = evaluate_metrics(
             symbol=sym, atr=atr, spread=tick.ask - tick.bid,
             contract_size=mt5.symbol_info(sym).trade_contract_size,
-            lot=config.HYBRID_LOT, point=mt5.symbol_info(sym).point,
+            lot=config.HYBRID_LOT_OVERRIDES.get(sym, config.HYBRID_LOT), point=mt5.symbol_info(sym).point,
             stops_level=mt5.symbol_info(sym).trade_stops_level,
             base=base, tp_atr=config.HYBRID_TP_ATR, sl_atr=config.HYBRID_SL_ATR,
             min_tp_spreads=config.HYBRID_MIN_TP_SPREADS,

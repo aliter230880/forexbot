@@ -27,6 +27,8 @@ TRADING_MODE=real
 HYBRID_TEST_BALANCE=150
 # Для XAUUSD: hard cap риска одной позиции 5% базы (цель 3-5%).
 HYBRID_XAU_MAX_POS_RISK_PCT=5
+# Минимальные лоты брокера на live (check_live): XAU=0.01, NAS100=0.1, GER40=0.1.
+HYBRID_LOT_OVERRIDES=NAS100.s=0.1,GER40.s=0.1
 
 # --- Инструменты: ПОДСТАВИТЬ фактические имена с live-счёта ---
 # На демо было: XAUUSD.s,NAS100.s,GER40.s

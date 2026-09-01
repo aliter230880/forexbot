@@ -117,7 +117,8 @@ def cmd_risk():
         info = mt5.symbol_info(sym)
         risk = evaluate_metrics(
             symbol=sym, atr=atr, spread=tick.ask - tick.bid,
-            contract_size=info.trade_contract_size, lot=config.HYBRID_LOT,
+            contract_size=info.trade_contract_size,
+            lot=config.HYBRID_LOT_OVERRIDES.get(sym, config.HYBRID_LOT),
             point=info.point, stops_level=info.trade_stops_level,
             base=config.HYBRID_TEST_BALANCE, tp_atr=config.HYBRID_TP_ATR,
             sl_atr=config.HYBRID_SL_ATR, min_tp_spreads=config.HYBRID_MIN_TP_SPREADS,
@@ -126,7 +127,7 @@ def cmd_risk():
             xau_max_pos_risk_pct=config.HYBRID_XAU_MAX_POS_RISK_PCT,
         )
         v = "OK" if risk["ok"] else "ПРОПУСК (" + risk["reason"] + ")"
-        spread_usd = risk["spread"] * info.trade_contract_size * config.HYBRID_LOT
+        spread_usd = risk["spread"] * info.trade_contract_size * config.HYBRID_LOT_OVERRIDES.get(sym, config.HYBRID_LOT)
         print(f"{sym:11} {atr:>10.4f} {risk['sl_usd']:>8.2f} {risk['risk_pct']:>6.1f}% "
               f"{risk['tp_usd']:>7.2f} {spread_usd:>8.3f} {risk['spread_pct']:>8.0f}%  {v}")
     print(f"\nмакс. позиций: {config.HYBRID_MAX_POS_PER_SYMBOL}/символ, "

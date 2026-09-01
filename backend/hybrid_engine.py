@@ -112,9 +112,12 @@ class HybridBot:
                     np.array([b["low"] for b in bars], float),
                     np.array([b["close"] for b in bars], float))
 
+    def lot_for_symbol(self, symbol: str) -> float:
+        return config.HYBRID_LOT_OVERRIDES.get(symbol, config.HYBRID_LOT)
+
     def usd_per_price_unit(self, symbol: str) -> float:
         info = mt5.symbol_info(symbol)
-        return info.trade_contract_size * config.HYBRID_LOT if info else 0.0
+        return info.trade_contract_size * self.lot_for_symbol(symbol) if info else 0.0
 
     # ---------- риск ----------
 
@@ -125,7 +128,7 @@ class HybridBot:
             if not p.sl:
                 continue
             pv = self.usd_per_price_unit(p.symbol)
-            total += abs(p.price_open - p.sl) * pv * (p.volume / config.HYBRID_LOT)
+            total += abs(p.price_open - p.sl) * pv
         return total
 
     # ---------- сетка ----------
@@ -145,9 +148,10 @@ class HybridBot:
         step = tp_d                                   # шаг = цель
         sl_d = tp_d * (config.HYBRID_SL_ATR / config.HYBRID_TP_ATR)
 
+        lot = self.lot_for_symbol(symbol)
         risk = evaluate_metrics(
             symbol=symbol, atr=atr, spread=tick.ask - tick.bid,
-            contract_size=info.trade_contract_size, lot=config.HYBRID_LOT,
+            contract_size=info.trade_contract_size, lot=lot,
             point=info.point, stops_level=info.trade_stops_level,
             base=config.HYBRID_TEST_BALANCE, tp_atr=config.HYBRID_TP_ATR,
             sl_atr=config.HYBRID_SL_ATR,
@@ -194,7 +198,7 @@ class HybridBot:
                 otype = mt5.ORDER_TYPE_SELL_LIMIT
             req = {
                 "action": mt5.TRADE_ACTION_PENDING, "symbol": symbol,
-                "volume": config.HYBRID_LOT, "type": otype, "price": price,
+                "volume": lot, "type": otype, "price": price,
                 "sl": sl, "tp": tp, "magic": config.HYBRID_MAGIC,
                 "comment": "hybrid", "type_time": mt5.ORDER_TIME_GTC,
             }

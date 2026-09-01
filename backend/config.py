@@ -146,6 +146,12 @@ MULTI_ENFORCE_RISK = os.getenv("MULTI_ENFORCE_RISK", "1") == "1"
 HYBRID_MAGIC = 20260826
 HYBRID_SYMBOLS = os.getenv("HYBRID_SYMBOLS", "XAUUSD.s,NAS100.s,GER40.s").split(",")
 HYBRID_LOT = float(os.getenv("HYBRID_LOT", "0.01"))
+# Broker live minimums can differ per symbol, e.g. NAS100/GER40=0.1.
+HYBRID_LOT_OVERRIDES = {
+    item.split("=", 1)[0].strip(): float(item.split("=", 1)[1])
+    for item in os.getenv("HYBRID_LOT_OVERRIDES", "").split(",")
+    if "=" in item and item.split("=", 1)[1].strip()
+}
 HYBRID_STEP_ATR = float(os.getenv("HYBRID_STEP_ATR", "1.0"))   # шаг сетки = ATR(M5) x N
 HYBRID_TP_ATR = float(os.getenv("HYBRID_TP_ATR", "1.0"))       # тейк = шаг
 HYBRID_SL_ATR = float(os.getenv("HYBRID_SL_ATR", "2.5"))       # стоп позиции = ATR x N
