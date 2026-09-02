@@ -15,7 +15,7 @@ BASE = dict(
     min_tp_spreads=10.0,
     max_spread_pct=12.0,
     max_pos_risk_pct=10.0,
-    xau_max_pos_risk_pct=5.0,
+    xau_max_pos_risk_pct=4.0,
 )
 
 
@@ -31,12 +31,12 @@ class HybridRiskTests(unittest.TestCase):
     def test_xau_above_five_percent_is_skipped(self):
         r = evaluate_metrics(symbol="XAUUSD.s", atr=3.1, **BASE)
         self.assertFalse(r["ok"])
-        self.assertIn("лимит 5.0%", r["reason"])
+        self.assertIn("лимит 4.0%", r["reason"])
 
     def test_xau_within_cap_passes(self):
         r = evaluate_metrics(symbol="XAUUSD.s", atr=1.0, **BASE)
         self.assertTrue(r["ok"])
-        self.assertEqual(r["risk_cap_pct"], 5.0)
+        self.assertEqual(r["risk_cap_pct"], 4.0)
 
     def test_indices_use_global_cap(self):
         r = evaluate_metrics(symbol="NAS100.s", atr=1.0, **BASE)
